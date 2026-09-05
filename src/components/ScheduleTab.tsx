@@ -30,6 +30,15 @@ export default function ScheduleTab({ state, setState }: ScheduleTabProps) {
   const [dragOverCell, setDragOverCell] = useState<string | null>(null);
   const [copySuccess, setCopySuccess] = useState(false);
   const [screenshotMode, setScreenshotMode] = useState(false);
+  const [mobileSlot, setMobileSlot] = useState(0);
+
+  // Mobile detection
+  const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth <= 768);
+  React.useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth <= 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   const numSlots = useMemo(() => {
     return calculateNumSlots(
@@ -373,29 +382,29 @@ export default function ScheduleTab({ state, setState }: ScheduleTabProps) {
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '0.75rem' }}>
         <div>
           <h1 className="page-title">スケジュール自動生成・微調整</h1>
           <p className="page-subtitle">マスターデータと制約をもとに、最適な練習スケジュールを自動で生成およびドラッグ調整します。</p>
         </div>
         
         {/* インポート / エクスポート */}
-        <div style={{ display: 'flex', gap: '0.5rem' }}>
-          <button className="btn btn-secondary" onClick={handleExportJSON} title="JSONでエクスポート">
-            <Download size={16} /> JSON保存
+        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+          <button className="btn btn-secondary" onClick={handleExportJSON} title="JSONでエクスポート" style={{ fontSize: '0.8rem', padding: '0.5rem 0.75rem' }}>
+            <Download size={14} /> JSON保存
           </button>
-          <label className="btn btn-secondary" style={{ cursor: 'pointer' }} title="JSONからインポート">
-            <Upload size={16} /> JSON読み込み
+          <label className="btn btn-secondary" style={{ cursor: 'pointer', fontSize: '0.8rem', padding: '0.5rem 0.75rem' }} title="JSONからインポート">
+            <Upload size={14} /> JSON読み込み
             <input type="file" accept=".json" onChange={handleImportJSON} style={{ display: 'none' }} />
           </label>
         </div>
       </div>
 
       {/* Control Actions */}
-      <div className="glass-card" style={{ marginBottom: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
-        <div style={{ display: 'flex', gap: '0.75rem' }}>
-          <button className="btn btn-primary" onClick={() => handleAutoGenerate(0)}>
-            <Play size={16} /> 全体を自動生成（最適化）
+      <div className="glass-card" style={{ marginBottom: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem' }}>
+        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+          <button className="btn btn-primary" onClick={() => handleAutoGenerate(0)} style={{ fontSize: '0.82rem' }}>
+            <Play size={16} /> 全体を自動生成
           </button>
           {state.assignments.length > 0 && (
             <>
@@ -455,7 +464,155 @@ export default function ScheduleTab({ state, setState }: ScheduleTabProps) {
           <Info size={36} />
           <div>「全体を自動生成」ボタンを押して、スケジュールを組みましょう。</div>
         </div>
+      ) : isMobile ? (
+        /* ==================== MOBILE: コマ別タイムライン表示 ==================== */
+        <div>
+          {/* コマ選択タブ */}
+          <div style={{ display: 'flex', gap: '0.35rem', overflowX: 'auto', marginBottom: '1rem', paddingBottom: '0.5rem', WebkitOverflowScrolling: 'touch' }}>
+            {Array.from({ length: numSlots }).map((_, s) => {
+              const timeRange = getSlotTimeRange(s, state.timeSettings.startTime, state.timeSettings.slotDuration, state.timeSettings.intervalDuration);
+              const isActive = mobileSlot === s;
+              return (
+                <button
+                  key={s}
+                  onClick={() => setMobileSlot(s)}
+                  style={{
+                    flex: '0 0 auto',
+                    padding: '0.5rem 0.75rem',
+                    borderRadius: 'var(--radius-sm)',
+                    border: isActive ? '2px solid var(--primary)' : '1px solid var(--border-color)',
+                    background: isActive ? 'rgba(79, 70, 229, 0.15)' : 'var(--bg-surface)',
+                    color: isActive ? 'var(--primary)' : 'var(--text-secondary)',
+                    fontFamily: 'var(--font-sans)',
+                    fontWeight: isActive ? 700 : 500,
+                    fontSize: '0.78rem',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: '0.1rem',
+                    whiteSpace: 'nowrap',
+                    transition: 'all 0.15s ease'
+                  }}
+                >
+                  <span style={{ fontSize: '0.65rem', opacity: 0.7 }}>コマ {s + 1}</span>
+                  <span>{timeRange.start}-{timeRange.end}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* 選択中のコマのヘッダー */}
+          {(() => {
+            const timeRange = getSlotTimeRange(mobileSlot, state.timeSettings.startTime, state.timeSettings.slotDuration, state.timeSettings.intervalDuration);
+            return (
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                <div>
+                  <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>コマ {mobileSlot + 1}</span>
+                  <strong style={{ fontSize: '1.15rem', display: 'block', color: 'var(--text-primary)' }}>{timeRange.start} - {timeRange.end}</strong>
+                </div>
+                <button
+                  className="btn btn-secondary"
+                  style={{ padding: '4px 8px', fontSize: '0.7rem', display: 'flex', alignItems: 'center', gap: '3px' }}
+                  onClick={() => handleAutoGenerate(mobileSlot)}
+                  title="このコマ以降を再計算"
+                >
+                  <RotateCcw size={12} /> ここから再計算
+                </button>
+              </div>
+            );
+          })()}
+
+          {/* 部屋カード一覧（縦並び） */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+            {state.rooms.map(room => {
+              const asm = state.assignments.find(a => a.slotIndex === mobileSlot && a.roomId === room.id);
+              const entry = asm?.entryId ? state.entries.find(e => e.id === asm.entryId) : null;
+              const song = entry ? state.songs.find(sg => sg.id === entry.songId) : null;
+
+              return (
+                <div
+                  key={room.id}
+                  className="glass-card"
+                  style={{
+                    padding: '0.85rem',
+                    borderLeft: asm?.entryId
+                      ? '4px solid var(--primary)'
+                      : asm?.isPersonalPractice
+                        ? '4px solid var(--info)'
+                        : '4px solid var(--border-color)'
+                  }}
+                >
+                  {/* 部屋名ヘッダー */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                      <strong style={{ fontSize: '0.95rem', color: 'var(--text-primary)' }}>{room.name}</strong>
+                      <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>({room.capacity}人)</span>
+                    </div>
+                    {asm && (
+                      <button
+                        onClick={() => toggleLock(mobileSlot, room.id)}
+                        className="btn btn-secondary btn-icon"
+                        style={{ padding: '4px', border: 'none', background: 'transparent' }}
+                        title={asm.isLocked ? '固定を解除' : '位置を固定'}
+                      >
+                        {asm.isLocked ? <Lock size={14} style={{ color: 'var(--warning)' }} /> : <Unlock size={14} style={{ color: 'var(--text-muted)' }} />}
+                      </button>
+                    )}
+                  </div>
+
+                  {/* 内容 */}
+                  {asm?.entryId && entry ? (
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.35rem' }}>
+                        <span className="badge badge-primary" style={{ fontSize: '0.7rem' }}>{song?.name || '曲名なし'}</span>
+                      </div>
+                      <div style={{ fontSize: '0.88rem', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '0.35rem' }}>
+                        {entry.section}
+                      </div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.25rem' }}>
+                        {entry.parts.map(p => (
+                          <span
+                            key={`${p.instrumentId}_${p.partIndex}`}
+                            style={{ fontSize: '0.7rem', background: 'rgba(255,255,255,0.05)', padding: '2px 5px', borderRadius: '3px', border: '1px solid var(--border-color)' }}
+                          >
+                            {formatPartName(p.instrumentId, p.partIndex, entry.songId, state.songs, state.instruments)}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  ) : asm?.isPersonalPractice ? (
+                    <div>
+                      <span className="badge badge-info" style={{ fontSize: '0.7rem', marginBottom: '0.35rem' }}>個人練習部屋</span>
+                      <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>
+                        退避中: {asm.parts.length} パート
+                      </div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.25rem', marginTop: '0.25rem' }}>
+                        {asm.parts.map((p, idx) => {
+                          const pSong = state.songs.find(sg => sg.id === p.songId);
+                          return (
+                            <span
+                              key={idx}
+                              style={{ fontSize: '0.68rem', background: 'rgba(6,182,212,0.1)', padding: '2px 4px', borderRadius: '3px', color: '#22d3ee' }}
+                            >
+                              {pSong ? `${pSong.name.substring(0,3)}:` : ''}{formatPartName(p.instrumentId, p.partIndex, p.songId, state.songs, state.instruments)}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ color: 'var(--text-muted)', fontSize: '0.82rem', fontStyle: 'italic' }}>
+                      空き部屋
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
       ) : (
+        /* ==================== DESKTOP: 従来のグリッド表示 ==================== */
         <div className="glass-card" style={{ overflowX: 'auto', padding: '1.5rem' }}>
           <div className="timetable-grid">
             {/* Header */}
