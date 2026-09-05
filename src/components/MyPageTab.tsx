@@ -199,20 +199,33 @@ export default function MyPageTab({ state }: MyPageTabProps) {
           担当パートを選択してください (複数選択可)
         </h2>
 
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', maxHeight: '180px', overflowY: 'auto', padding: '0.25rem' }}>
-          {availableParts.map(item => {
-            const isSelected = selectedParts.some(
-              p => p.songId === item.song.id && p.instrumentId === item.inst.id && p.partIndex === item.partIndex
-            );
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', maxHeight: '250px', overflowY: 'auto', padding: '0.25rem' }}>
+          {state.songs.map(song => {
+            const songParts = availableParts.filter(p => p.song.id === song.id);
+            if (songParts.length === 0) return null;
             return (
-              <button
-                key={item.key}
-                onClick={() => togglePartSelection(item.song.id, item.inst.id, item.partIndex)}
-                className={`btn ${isSelected ? 'btn-primary' : 'btn-secondary'}`}
-                style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem', fontWeight: 500 }}
-              >
-                {item.song.name.substring(0, 5)}...: {formatPartName(item.inst.id, item.partIndex, item.song.id, state.songs, state.instruments)}
-              </button>
+              <div key={song.id}>
+                <div style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.35rem' }}>
+                  {song.name}
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
+                  {songParts.map(item => {
+                    const isSelected = selectedParts.some(
+                      p => p.songId === item.song.id && p.instrumentId === item.inst.id && p.partIndex === item.partIndex
+                    );
+                    return (
+                      <button
+                        key={item.key}
+                        onClick={() => togglePartSelection(item.song.id, item.inst.id, item.partIndex)}
+                        className={`btn ${isSelected ? 'btn-primary' : 'btn-secondary'}`}
+                        style={{ padding: '0.45rem 0.7rem', fontSize: '0.78rem', fontWeight: 500, minHeight: '36px' }}
+                      >
+                        {formatPartName(item.inst.id, item.partIndex, item.song.id, state.songs, state.instruments)}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
             );
           })}
         </div>
@@ -304,7 +317,7 @@ export default function MyPageTab({ state }: MyPageTabProps) {
                 </div>
 
                 {/* 3. 移動指示 */}
-                <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                <div className="mypage-move-badge" style={{ display: 'flex', justifyContent: 'flex-end' }}>
                   {isLastSlot ? (
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
                       <Clock size={16} />

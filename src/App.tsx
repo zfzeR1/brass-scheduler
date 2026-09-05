@@ -234,6 +234,38 @@ export default function App() {
           <MyPageTab state={state} />
         )}
       </main>
+
+      {/* Mobile Bottom Navigation */}
+      <nav className="mobile-bottom-nav">
+        <button
+          className={`mobile-nav-btn ${activeTab === 'schedule' ? 'active' : ''}`}
+          onClick={() => setActiveTab('schedule')}
+        >
+          <Calendar size={22} className="nav-icon" />
+          <span>スケジュール</span>
+        </button>
+        <button
+          className={`mobile-nav-btn ${activeTab === 'mypage' ? 'active' : ''}`}
+          onClick={() => setActiveTab('mypage')}
+        >
+          <User size={22} className="nav-icon" />
+          <span>マイページ</span>
+        </button>
+        <button
+          className={`mobile-nav-btn ${activeTab === 'master' ? 'active' : ''}`}
+          onClick={() => setActiveTab('master')}
+        >
+          <Settings size={22} className="nav-icon" />
+          <span>基本設定</span>
+        </button>
+        <button
+          className="mobile-nav-btn"
+          onClick={toggleTheme}
+        >
+          {theme === 'dark' ? <Sun size={22} className="nav-icon" /> : <Moon size={22} className="nav-icon" />}
+          <span>{theme === 'dark' ? 'ライト' : 'ダーク'}</span>
+        </button>
+      </nav>
     </div>
   );
 }
