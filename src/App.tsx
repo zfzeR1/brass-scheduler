@@ -236,6 +236,28 @@ export default function App() {
     }
   }, [state, isMemberMode]);
 
+  // タブ切り替え時の未入力事前チェック（ガード機能）
+  const handleTabChange = (targetTab: TabKey) => {
+    if (targetTab === 'schedule' || targetTab === 'share') {
+      if (state.rooms.length === 0) {
+        alert('⚠️ 練習室が1部屋も登録されていません。\nまずは「1-1 基本設定(時間・部屋)」で練習室を登録してください。');
+        setActiveTab('master');
+        return;
+      }
+      if (state.songs.length === 0) {
+        alert('⚠️ 演奏曲が1曲も登録されていません。\n「1-2 曲・パート編成」で演奏曲を登録してください。');
+        setActiveTab('master');
+        return;
+      }
+      if (state.entries.length === 0) {
+        alert('⚠️ スケジュールを作成する「セクション練習」がまだ1件も登録されていません。\n「1-4 セクション練習」で練習内容を登録してください。');
+        setActiveTab('master');
+        return;
+      }
+    }
+    setActiveTab(targetTab);
+  };
+
   // 共有リンク生成
   const handleGenerateShareLink = () => {
     const encoded = encodeScheduleData(state);
@@ -299,7 +321,7 @@ export default function App() {
         <nav className="nav-links">
           <button
             className={`nav-btn ${activeTab === 'master' ? 'active' : ''}`}
-            onClick={() => setActiveTab('master')}
+            onClick={() => handleTabChange('master')}
           >
             <Settings size={18} />
             <span>STEP 1: 基本条件設定</span>
@@ -307,7 +329,7 @@ export default function App() {
 
           <button
             className={`nav-btn ${activeTab === 'schedule' ? 'active' : ''}`}
-            onClick={() => setActiveTab('schedule')}
+            onClick={() => handleTabChange('schedule')}
           >
             <Calendar size={18} />
             <span>STEP 2: スケジュール生成</span>
@@ -315,7 +337,7 @@ export default function App() {
 
           <button
             className={`nav-btn ${activeTab === 'share' ? 'active' : ''}`}
-            onClick={() => setActiveTab('share')}
+            onClick={() => handleTabChange('share')}
           >
             <Share2 size={18} />
             <span>STEP 3: 共有・確認</span>
@@ -338,7 +360,7 @@ export default function App() {
             <Fragment key={step.key}>
               <button
                 className={`stepper-step ${activeTab === step.key ? 'active' : ''}`}
-                onClick={() => setActiveTab(step.key)}
+                onClick={() => handleTabChange(step.key)}
               >
                 <div className="stepper-number">{step.num}</div>
                 <div className="stepper-text">
@@ -353,14 +375,11 @@ export default function App() {
 
         {/* ---------- STEP 1: 基本条件設定 ---------- */}
         {activeTab === 'master' && (
-          <>
-            <MasterDataTab state={state} setState={setState} />
-            <div className="next-step-bar">
-              <button className="btn btn-primary btn-next-step" onClick={() => setActiveTab('schedule')}>
-                次へ: スケジュール生成に進む <ChevronRight size={18} />
-              </button>
-            </div>
-          </>
+          <MasterDataTab
+            state={state}
+            setState={setState}
+            onProceedToSchedule={() => handleTabChange('schedule')}
+          />
         )}
 
         {/* ---------- STEP 2: スケジュール生成 ---------- */}
@@ -432,21 +451,21 @@ export default function App() {
       <nav className="mobile-bottom-nav">
         <button
           className={`mobile-nav-btn ${activeTab === 'master' ? 'active' : ''}`}
-          onClick={() => setActiveTab('master')}
+          onClick={() => handleTabChange('master')}
         >
           <Settings size={22} className="nav-icon" />
           <span>①設定</span>
         </button>
         <button
           className={`mobile-nav-btn ${activeTab === 'schedule' ? 'active' : ''}`}
-          onClick={() => setActiveTab('schedule')}
+          onClick={() => handleTabChange('schedule')}
         >
           <Calendar size={22} className="nav-icon" />
           <span>②生成</span>
         </button>
         <button
           className={`mobile-nav-btn ${activeTab === 'share' ? 'active' : ''}`}
-          onClick={() => setActiveTab('share')}
+          onClick={() => handleTabChange('share')}
         >
           <Share2 size={22} className="nav-icon" />
           <span>③共有</span>

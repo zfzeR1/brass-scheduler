@@ -9,16 +9,39 @@ import type {
   PartReference
 } from '../types';
 import { STANDARD_PART_COUNTS } from '../types';
-import { Plus, Trash2, Clock, MapPin, ShieldAlert, Award, FileText, CheckSquare, Square, ArrowUp, ArrowDown, Edit3 } from 'lucide-react';
+import { Plus, Trash2, Clock, MapPin, ShieldAlert, Award, FileText, CheckSquare, Square, ArrowUp, ArrowDown, Edit3, ChevronRight } from 'lucide-react';
 import { formatPartName } from '../utils/scheduler';
 
 interface MasterDataTabProps {
   state: ScheduleState;
   setState: React.Dispatch<React.SetStateAction<ScheduleState>>;
+  onProceedToSchedule?: () => void;
 }
 
-export default function MasterDataTab({ state, setState }: MasterDataTabProps) {
+export default function MasterDataTab({ state, setState, onProceedToSchedule }: MasterDataTabProps) {
   const [subTab, setSubTab] = useState<'settings' | 'songs' | 'ng-pairs' | 'entries'>('settings');
+
+  // 未入力事前チェック（ガード機能）
+  const validateAndProceedToSchedule = () => {
+    if (state.rooms.length === 0) {
+      alert('⚠️ 練習室が1部屋も登録されていません。\nまずは「1-1 基本設定(時間・部屋)」で練習室を登録してください。');
+      setSubTab('settings');
+      return;
+    }
+    if (state.songs.length === 0) {
+      alert('⚠️ 演奏曲が1曲も登録されていません。\n「1-2 曲・パート編成」で演奏曲を登録してください。');
+      setSubTab('songs');
+      return;
+    }
+    if (state.entries.length === 0) {
+      alert('⚠️ スケジュールを作成する「セクション練習」がまだ1件も登録されていません。\n「1-4 セクション練習」で練習内容を登録してください。');
+      setSubTab('entries');
+      return;
+    }
+    if (onProceedToSchedule) {
+      onProceedToSchedule();
+    }
+  };
 
   // --- セクション練習 編集用ステート ---
   const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
@@ -374,23 +397,100 @@ export default function MasterDataTab({ state, setState }: MasterDataTabProps) {
       <h1 className="page-title">基本条件設定</h1>
       <p className="page-subtitle">スケジュール割り当ての前提となる基本条件を設定します。</p>
 
+      {/* 準備状況ダッシュボード */}
+      <div className="status-dashboard glass-card" style={{ marginBottom: '1.5rem', padding: '0.85rem 1rem' }}>
+        <div style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.6rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+          <CheckSquare size={16} style={{ color: 'var(--primary)' }} />
+          <span>準備状況ダッシュボード（タップして各項目へ移動）</span>
+        </div>
+        <div className="dashboard-grid">
+          {/* 1-1 時間・部屋 */}
+          <div
+            className={`dashboard-card ${subTab === 'settings' ? 'active' : ''}`}
+            onClick={() => setSubTab('settings')}
+          >
+            <div className="dashboard-card-header">
+              <span className="step-tag">1-1</span>
+              <span className="card-title">時間・部屋</span>
+            </div>
+            <div className="card-status">
+              {state.rooms.length > 0 ? (
+                <span className="status-badge success">✅ {state.rooms.length}部屋</span>
+              ) : (
+                <span className="status-badge warning">⚠️ 未登録</span>
+              )}
+            </div>
+          </div>
+
+          {/* 1-2 演奏曲 */}
+          <div
+            className={`dashboard-card ${subTab === 'songs' ? 'active' : ''}`}
+            onClick={() => setSubTab('songs')}
+          >
+            <div className="dashboard-card-header">
+              <span className="step-tag">1-2</span>
+              <span className="card-title">演奏曲・編成</span>
+            </div>
+            <div className="card-status">
+              {state.songs.length > 0 ? (
+                <span className="status-badge success">✅ {state.songs.length}曲</span>
+              ) : (
+                <span className="status-badge danger">⚠️ 未登録(必須)</span>
+              )}
+            </div>
+          </div>
+
+          {/* 1-3 兼任NG */}
+          <div
+            className={`dashboard-card ${subTab === 'ng-pairs' ? 'active' : ''}`}
+            onClick={() => setSubTab('ng-pairs')}
+          >
+            <div className="dashboard-card-header">
+              <span className="step-tag">1-3</span>
+              <span className="card-title">兼任・重複NG</span>
+            </div>
+            <div className="card-status">
+              <span className="status-badge neutral">⚪ 任意 ({state.duplicateNGPairs.length}件)</span>
+            </div>
+          </div>
+
+          {/* 1-4 練習内容 */}
+          <div
+            className={`dashboard-card ${subTab === 'entries' ? 'active' : ''}`}
+            onClick={() => setSubTab('entries')}
+          >
+            <div className="dashboard-card-header">
+              <span className="step-tag">1-4</span>
+              <span className="card-title">セクション練習</span>
+            </div>
+            <div className="card-status">
+              {state.entries.length > 0 ? (
+                <span className="status-badge success">✅ {state.entries.length}件</span>
+              ) : (
+                <span className="status-badge danger">⚠️ 未登録(必須)</span>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Sub Tabs */}
-      <div className="nav-links" style={{ flexDirection: 'row', marginBottom: '2rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '1rem' }}>
+      <div className="nav-links" style={{ flexDirection: 'row', marginBottom: '1.5rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.75rem', flexWrap: 'wrap', gap: '0.35rem' }}>
         <button className={`nav-btn ${subTab === 'settings' ? 'active' : ''}`} onClick={() => setSubTab('settings')}>
           <Clock size={16} />
-          基本設定(時間・部屋)
+          1-1 基本設定(時間・部屋)
         </button>
         <button className={`nav-btn ${subTab === 'songs' ? 'active' : ''}`} onClick={() => setSubTab('songs')}>
           <FileText size={16} />
-          曲・パート編成
+          1-2 曲・パート編成
         </button>
         <button className={`nav-btn ${subTab === 'ng-pairs' ? 'active' : ''}`} onClick={() => setSubTab('ng-pairs')}>
           <ShieldAlert size={16} />
-          兼任・重複NG設定
+          1-3 兼任NG (任意)
         </button>
         <button className={`nav-btn ${subTab === 'entries' ? 'active' : ''}`} onClick={() => setSubTab('entries')}>
           <Award size={16} />
-          セクション練習
+          1-4 セクション練習 (必須)
         </button>
       </div>
 
@@ -538,6 +638,23 @@ export default function MasterDataTab({ state, setState }: MasterDataTabProps) {
                   </div>
                 );
               })}
+            </div>
+
+            {/* 次のステップへ */}
+            <div className="next-step-bar" style={{ marginTop: '1.5rem' }}>
+              <button
+                type="button"
+                className="btn btn-primary btn-next-step"
+                onClick={() => {
+                  if (state.rooms.length === 0) {
+                    alert('⚠️ 練習室を最低1部屋登録してください。');
+                    return;
+                  }
+                  setSubTab('songs');
+                }}
+              >
+                次へ: 1-2 曲・パート編成へ <ChevronRight size={18} />
+              </button>
             </div>
           </div>
         </div>
@@ -798,6 +915,23 @@ export default function MasterDataTab({ state, setState }: MasterDataTabProps) {
                 })
               )}
             </div>
+
+            {/* 次のステップへ */}
+            <div className="next-step-bar" style={{ marginTop: '1.5rem' }}>
+              <button
+                type="button"
+                className="btn btn-primary btn-next-step"
+                onClick={() => {
+                  if (state.songs.length === 0) {
+                    alert('⚠️ 演奏曲を最低1曲登録してください。');
+                    return;
+                  }
+                  setSubTab('ng-pairs');
+                }}
+              >
+                次へ: 1-3 兼任・重複NG設定へ <ChevronRight size={18} />
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -982,6 +1116,17 @@ export default function MasterDataTab({ state, setState }: MasterDataTabProps) {
                 </tbody>
               </table>
             </div>
+          </div>
+
+          {/* 次のステップへ */}
+          <div className="next-step-bar" style={{ gridColumn: 'span 2', marginTop: '1.5rem' }}>
+            <button
+              type="button"
+              className="btn btn-primary btn-next-step"
+              onClick={() => setSubTab('entries')}
+            >
+              次へ: 1-4 セクション練習へ (スキップ可) <ChevronRight size={18} />
+            </button>
           </div>
         </div>
       )}
@@ -1211,6 +1356,17 @@ export default function MasterDataTab({ state, setState }: MasterDataTabProps) {
                 </tbody>
               </table>
             </div>
+          </div>
+
+          {/* 全設定完了！STEP 2へ */}
+          <div className="next-step-bar" style={{ marginTop: '1.5rem' }}>
+            <button
+              type="button"
+              className="btn btn-primary btn-next-step"
+              onClick={validateAndProceedToSchedule}
+            >
+              全設定完了！STEP 2: スケジュール生成へ進む <ChevronRight size={18} />
+            </button>
           </div>
         </div>
       )}
