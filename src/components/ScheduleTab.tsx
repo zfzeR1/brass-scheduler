@@ -242,7 +242,7 @@ export default function ScheduleTab({ state, setState }: ScheduleTabProps) {
       {/* Control Actions */}
       <div className="glass-card" style={{ marginBottom: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem' }}>
         <button className="btn btn-primary" onClick={() => handleAutoGenerate(0)} style={{ fontSize: '0.85rem', padding: '0.6rem 1.25rem' }}>
-          <Play size={16} /> 全体を自動生成
+          <Play size={16} /> スケジュールを自動生成
         </button>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -289,7 +289,7 @@ export default function ScheduleTab({ state, setState }: ScheduleTabProps) {
       {state.assignments.length === 0 ? (
         <div style={{ height: '300px', border: '2px dashed var(--border-color)', borderRadius: 'var(--radius-lg)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '1rem', color: 'var(--text-muted)' }}>
           <Info size={36} />
-          <div>「全体を自動生成」ボタンを押して、スケジュールを組みましょう。</div>
+          <div>「スケジュールを自動生成」ボタンを押して、スケジュールを組みましょう。</div>
         </div>
       ) : isMobile ? (
         /* ==================== MOBILE: コマ別タイムライン表示 ==================== */
