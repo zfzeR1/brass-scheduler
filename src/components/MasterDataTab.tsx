@@ -453,12 +453,12 @@ export default function MasterDataTab({ state, setState }: MasterDataTabProps) {
 
 
           {/* 部屋データ */}
-          <div className="glass-card" style={{ gridColumn: 'span 2' }}>
+          <div className="glass-card grid-span-2">
             <h2 style={{ fontSize: '1.2rem', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
               <MapPin size={20} className="badge-success" />
               部屋（練習室）管理
             </h2>
-            <form onSubmit={handleAddRoom} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1.5fr 1fr', gap: '0.5rem', alignItems: 'end', marginBottom: '1.5rem' }}>
+            <form onSubmit={handleAddRoom} className="form-grid-room">
               <div className="form-group" style={{ margin: 0 }}>
                 <label className="form-label">部屋名</label>
                 <input name="name" placeholder="部屋名 (例: 音楽室)" className="form-control" required />
@@ -486,33 +486,58 @@ export default function MasterDataTab({ state, setState }: MasterDataTabProps) {
             <h3 style={{ fontSize: '1rem', marginTop: '1.5rem', marginBottom: '0.75rem', color: 'var(--text-primary)' }}>
               登録済み部屋
             </h3>
-            <table className="custom-table">
-              <thead>
-                <tr>
-                  <th>部屋名</th>
-                  <th>定員</th>
-                  <th>常設楽器</th>
-                  <th>操作</th>
-                </tr>
-              </thead>
-              <tbody>
-                {state.rooms.map(room => {
-                  const permanentInst = state.instruments.find(i => i.id === room.permanentInstrumentId);
-                  return (
-                    <tr key={room.id}>
-                      <td>{room.name}</td>
-                      <td>{room.capacity} 人</td>
-                      <td>{permanentInst ? permanentInst.name : '-'}</td>
-                      <td>
-                        <button className="btn btn-secondary btn-icon" onClick={() => handleRemoveRoom(room.id)}>
-                          <Trash2 size={14} style={{ color: 'var(--danger)' }} />
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+            {/* Desktop: table */}
+            <div className="desktop-only">
+              <table className="custom-table">
+                <thead>
+                  <tr>
+                    <th>部屋名</th>
+                    <th>定員</th>
+                    <th>常設楽器</th>
+                    <th>操作</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {state.rooms.map(room => {
+                    const permanentInst = state.instruments.find(i => i.id === room.permanentInstrumentId);
+                    return (
+                      <tr key={room.id}>
+                        <td>{room.name}</td>
+                        <td>{room.capacity} 人</td>
+                        <td>{permanentInst ? permanentInst.name : '-'}</td>
+                        <td>
+                          <button className="btn btn-secondary btn-icon" onClick={() => handleRemoveRoom(room.id)}>
+                            <Trash2 size={14} style={{ color: 'var(--danger)' }} />
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            {/* Mobile: card list */}
+            <div className="mobile-only" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              {state.rooms.map(room => {
+                const permanentInst = state.instruments.find(i => i.id === room.permanentInstrumentId);
+                return (
+                  <div key={room.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.65rem 0.75rem', background: 'var(--bg-surface)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)' }}>
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: '0.88rem' }}>
+                        {room.name}
+                        <span className="badge badge-primary" style={{ marginLeft: '0.4rem', fontSize: '0.65rem' }}>{room.capacity}人</span>
+                      </div>
+                      {permanentInst && (
+                        <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.15rem' }}>常設: {permanentInst.name}</div>
+                      )}
+                    </div>
+                    <button className="btn btn-secondary btn-icon" onClick={() => handleRemoveRoom(room.id)} style={{ flexShrink: 0 }}>
+                      <Trash2 size={14} style={{ color: 'var(--danger)' }} />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </div>
       )}
@@ -783,7 +808,7 @@ export default function MasterDataTab({ state, setState }: MasterDataTabProps) {
             </p>
 
             <form onSubmit={handleAddNGPair} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', gap: '0.75rem', alignItems: 'start' }}>
+              <div className="form-grid-ng">
                 {/* Side A */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                   <div className="form-group" style={{ margin: 0 }}>
@@ -963,7 +988,7 @@ export default function MasterDataTab({ state, setState }: MasterDataTabProps) {
           {/* 新規追加 */}
           <div className="glass-card">
             <h2 style={{ fontSize: '1.2rem', marginBottom: '1.5rem' }}>セクション練習の追加</h2>
-            <form onSubmit={handleAddEntry} style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr 1fr', gap: '1.5rem' }}>
+            <form onSubmit={handleAddEntry} className="form-grid-entry">
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                 <div className="form-group">
                   <label className="form-label">対象曲</label>
@@ -1000,7 +1025,7 @@ export default function MasterDataTab({ state, setState }: MasterDataTabProps) {
               </div>
 
               {/* 参加パート選択 */}
-              <div style={{ gridColumn: 'span 2' }}>
+              <div className="grid-span-2">
                 <label className="form-label" style={{ marginBottom: '1rem' }}>参加パート (複数選択)</label>
                 {entrySongId ? (
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '0.75rem', maxHeight: '280px', overflowY: 'auto', border: '1px solid var(--border-color)', padding: '1rem', borderRadius: 'var(--radius-md)' }}>
