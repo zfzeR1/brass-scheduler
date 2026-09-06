@@ -11,7 +11,7 @@ import type {
 import MasterDataTab from './components/MasterDataTab';
 import ScheduleTab from './components/ScheduleTab';
 import MyPageTab from './components/MyPageTab';
-import { Music, Settings, Calendar, Share2, Sun, Moon, Info, ChevronRight, Copy, ExternalLink } from 'lucide-react';
+import { Music, Settings, Calendar, Share2, Info, ChevronRight, Copy, ExternalLink } from 'lucide-react';
 
 // --- スケジュールデータの圧縮エンコード/デコード (Unicode対応) ---
 function encodeScheduleData(data: ScheduleState): string {
@@ -171,7 +171,6 @@ export default function App() {
 
   // --- 管理者モード ---
   const [activeTab, setActiveTab] = useState<TabKey>('master');
-  const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   const [shareCopied, setShareCopied] = useState(false);
   const [state, setState] = useState<ScheduleState>(() => {
     const saved = localStorage.getItem('antigravity_schedule_state');
@@ -196,6 +195,22 @@ export default function App() {
     };
   });
 
+  // OSのテーマ設定（ダーク/ライト）に自動追従
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    const applyTheme = (e: MediaQueryList | MediaQueryListEvent) => {
+      if (e.matches) {
+        document.body.classList.remove('light-theme');
+      } else {
+        document.body.classList.add('light-theme');
+      }
+    };
+
+    applyTheme(mediaQuery);
+    mediaQuery.addEventListener('change', applyTheme);
+    return () => mediaQuery.removeEventListener('change', applyTheme);
+  }, []);
+
   // URL パラメータから部員閲覧モードを検出
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -217,19 +232,6 @@ export default function App() {
       localStorage.setItem('antigravity_schedule_state', JSON.stringify(state));
     }
   }, [state, isMemberMode]);
-
-  // テーマ適用
-  useEffect(() => {
-    if (theme === 'light') {
-      document.body.classList.add('light-theme');
-    } else {
-      document.body.classList.remove('light-theme');
-    }
-  }, [theme]);
-
-  const toggleTheme = () => {
-    setTheme(prev => (prev === 'dark' ? 'light' : 'dark'));
-  };
 
   // 共有リンク生成
   const handleGenerateShareLink = () => {
@@ -253,19 +255,9 @@ export default function App() {
         {/* ヘッダー */}
         <div className="member-header">
           <div className="member-header-inner">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                <Music size={22} style={{ color: 'var(--primary)' }} />
-                <h1 className="member-title">練習スケジュール</h1>
-              </div>
-              <button
-                className="btn btn-secondary btn-icon"
-                onClick={toggleTheme}
-                title="テーマ切り替え"
-                style={{ flexShrink: 0 }}
-              >
-                {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
-              </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+              <Music size={22} style={{ color: 'var(--primary)' }} />
+              <h1 className="member-title">練習スケジュール</h1>
             </div>
             <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginTop: '0.35rem' }}>
               練習時間: {memberData.timeSettings.startTime} 〜 {memberData.timeSettings.endTime} ｜ 1コマ: {memberData.timeSettings.slotDuration}分 ｜ インターバル: {memberData.timeSettings.intervalDuration}分
@@ -327,15 +319,7 @@ export default function App() {
           </button>
         </nav>
 
-        {/* テーマ切り替え */}
-        <div className="theme-switch">
-          <button className="btn btn-secondary btn-icon" onClick={toggleTheme} title="テーマ切り替え">
-            {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
-          </button>
-          <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-            {theme === 'dark' ? 'ダークモード' : 'ライトモード'}
-          </span>
-        </div>
+
 
         <div style={{ marginTop: 'auto', display: 'flex', gap: '0.5rem', alignItems: 'center', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
           <Info size={12} />
@@ -464,13 +448,7 @@ export default function App() {
           <Share2 size={22} className="nav-icon" />
           <span>③共有</span>
         </button>
-        <button
-          className="mobile-nav-btn"
-          onClick={toggleTheme}
-        >
-          {theme === 'dark' ? <Sun size={22} className="nav-icon" /> : <Moon size={22} className="nav-icon" />}
-          <span>{theme === 'dark' ? 'ライト' : 'ダーク'}</span>
-        </button>
+
       </nav>
     </div>
   );

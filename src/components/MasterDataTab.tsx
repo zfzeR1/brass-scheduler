@@ -479,7 +479,7 @@ export default function MasterDataTab({ state, setState }: MasterDataTabProps) {
                 </select>
               </div>
               <button type="submit" className="btn btn-primary" style={{ height: '42px' }}>
-                <Plus size={16} /> 追加
+                <Plus size={16} /> 登録
               </button>
             </form>
 
