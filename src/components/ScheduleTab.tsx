@@ -12,12 +12,8 @@ import {
   RotateCcw,
   Lock,
   Unlock,
-  Copy,
-  Camera,
   CheckCircle,
   AlertTriangle,
-  Download,
-  Upload,
   Info
 } from 'lucide-react';
 
@@ -28,8 +24,6 @@ interface ScheduleTabProps {
 
 export default function ScheduleTab({ state, setState }: ScheduleTabProps) {
   const [dragOverCell, setDragOverCell] = useState<string | null>(null);
-  const [copySuccess, setCopySuccess] = useState(false);
-  const [screenshotMode, setScreenshotMode] = useState(false);
   const [mobileSlot, setMobileSlot] = useState(0);
 
   // Mobile detection
@@ -149,88 +143,7 @@ export default function ScheduleTab({ state, setState }: ScheduleTabProps) {
     }
   };
 
-  // 全体スケジュールのテキストコピー (Markdownフォーマット)
-  const handleCopyText = () => {
-    if (state.assignments.length === 0) return;
 
-    let text = `## 吹奏楽練習タイムテーブル (${state.timeSettings.startTime} 〜 ${state.timeSettings.endTime})\n\n`;
-
-    for (let s = 0; s < numSlots; s++) {
-      const timeRange = getSlotTimeRange(
-        s,
-        state.timeSettings.startTime,
-        state.timeSettings.slotDuration,
-        state.timeSettings.intervalDuration
-      );
-      text += `### コマ ${s + 1} (${timeRange.start} 〜 ${timeRange.end})\n`;
-
-      const slotAsms = state.assignments.filter(asm => asm.slotIndex === s);
-      for (const asm of slotAsms) {
-        const room = state.rooms.find(r => r.id === asm.roomId);
-        if (asm.entryId) {
-          const entry = state.entries.find(e => e.id === asm.entryId);
-          const song = state.songs.find(sg => sg.id === entry?.songId);
-          text += `- **[${room?.name}]** ${song?.name || ''} - ${entry?.section || ''} (参加: `;
-          text += entry?.parts
-            .map(p => {
-              return formatPartName(p.instrumentId, p.partIndex, entry?.songId, state.songs, state.instruments);
-            })
-            .join(', ') || '';
-          text += ')\n';
-        } else if (asm.isPersonalPractice) {
-          text += `- **[${room?.name}]** 個人練習部屋 (退避パート: `;
-          text += asm.parts
-            .map(p => {
-              const song = state.songs.find(sg => sg.id === p.songId);
-              return `${song?.name.substring(0,3)}:${formatPartName(p.instrumentId, p.partIndex, p.songId, state.songs, state.instruments)}`;
-            })
-            .join(', ') || 'なし';
-          text += ')\n';
-        } else {
-          text += `- **[${room?.name}]** 空き部屋\n`;
-        }
-      }
-      text += '\n';
-    }
-
-    navigator.clipboard.writeText(text).then(() => {
-      setCopySuccess(true);
-      setTimeout(() => setCopySuccess(false), 2000);
-    });
-  };
-
-  // 設定データをJSONとしてダウンロード
-  const handleExportJSON = () => {
-    const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(state, null, 2));
-    const downloadAnchor = document.createElement('a');
-    downloadAnchor.setAttribute('href', dataStr);
-    downloadAnchor.setAttribute('download', `section_optimizer_settings_${Date.now()}.json`);
-    document.body.appendChild(downloadAnchor);
-    downloadAnchor.click();
-    downloadAnchor.remove();
-  };
-
-  // 設定データをJSONからアップロード
-  const handleImportJSON = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = event => {
-      try {
-        const parsed = JSON.parse(event.target?.result as string);
-        if (parsed.rooms && parsed.songs && parsed.entries) {
-          setState(parsed);
-          alert('設定データを正常に読み込みました。');
-        } else {
-          alert('不正なファイルフォーマットです。');
-        }
-      } catch (err) {
-        alert('ファイルの読み込みに失敗しました。');
-      }
-    };
-    reader.readAsText(file);
-  };
 
   // --- ヘルパー: 部屋にアサインされている内容を取得 ---
   const renderCellContent = (asm: Assignment) => {
@@ -319,104 +232,18 @@ export default function ScheduleTab({ state, setState }: ScheduleTabProps) {
   };
 
   // スクショ用のシンプル画面切り替え
-  if (screenshotMode) {
-    return (
-      <div style={{ padding: '2rem', background: 'var(--bg-main)', minHeight: '100vh' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
-          <div>
-            <h1 className="page-title">練習スケジュール全体タイムテーブル</h1>
-            <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
-              練習時間: {state.timeSettings.startTime} 〜 {state.timeSettings.endTime} | 1コマ: {state.timeSettings.slotDuration}分
-            </p>
-          </div>
-          <button className="btn btn-secondary" onClick={() => setScreenshotMode(false)}>
-            コントロールに戻る
-          </button>
-        </div>
-
-        {/* タイムテーブルのみを表示 */}
-        <div className="glass-card" style={{ padding: '2rem', overflowX: 'auto' }}>
-          <div className="timetable-grid">
-            <div className="timetable-header">
-              <div style={{ fontWeight: 600 }}>時間枠</div>
-              {state.rooms.map(room => (
-                <div key={room.id} style={{ fontWeight: 600, paddingLeft: '0.5rem' }}>
-                  {room.name} <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>({room.capacity}人)</span>
-                </div>
-              ))}
-            </div>
-
-            {Array.from({ length: numSlots }).map((_, s) => {
-              const timeRange = getSlotTimeRange(
-                s,
-                state.timeSettings.startTime,
-                state.timeSettings.slotDuration,
-                state.timeSettings.intervalDuration
-              );
-              return (
-                <div key={s} className="timetable-row">
-                  <div className="timetable-time-col">
-                    <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>コマ {s + 1}</span>
-                    <strong style={{ fontSize: '0.95rem' }}>{timeRange.start} - {timeRange.end}</strong>
-                  </div>
-                  {state.rooms.map(room => {
-                    const key = `${s}_${room.id}`;
-                    const asm = state.assignments.find(a => a.slotIndex === s && a.roomId === room.id);
-                    return (
-                      <div
-                        key={key}
-                        className={`timetable-cell ${room.isPersonalPracticeCandidate ? 'personal-practice-room' : ''}`}
-                      >
-                        {asm ? renderCellContent(asm) : <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>空き</span>}
-                      </div>
-                    );
-                  })}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '0.75rem' }}>
-        <div>
-          <h1 className="page-title">スケジュール自動生成・微調整</h1>
-          <p className="page-subtitle">マスターデータと制約をもとに、最適な練習スケジュールを自動で生成およびドラッグ調整します。</p>
-        </div>
-        
-        {/* インポート / エクスポート */}
-        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-          <button className="btn btn-secondary" onClick={handleExportJSON} title="JSONでエクスポート" style={{ fontSize: '0.8rem', padding: '0.5rem 0.75rem' }}>
-            <Download size={14} /> JSON保存
-          </button>
-          <label className="btn btn-secondary" style={{ cursor: 'pointer', fontSize: '0.8rem', padding: '0.5rem 0.75rem' }} title="JSONからインポート">
-            <Upload size={14} /> JSON読み込み
-            <input type="file" accept=".json" onChange={handleImportJSON} style={{ display: 'none' }} />
-          </label>
-        </div>
+      <div style={{ marginBottom: '1.5rem' }}>
+        <h1 className="page-title">スケジュール自動生成・微調整</h1>
+        <p className="page-subtitle">マスターデータと制約をもとに、最適な練習スケジュールを自動で生成およびドラッグ調整します。</p>
       </div>
 
       {/* Control Actions */}
       <div className="glass-card" style={{ marginBottom: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem' }}>
-        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-          <button className="btn btn-primary" onClick={() => handleAutoGenerate(0)} style={{ fontSize: '0.82rem' }}>
-            <Play size={16} /> 全体を自動生成
-          </button>
-          {state.assignments.length > 0 && (
-            <>
-              <button className="btn btn-secondary" onClick={handleCopyText}>
-                <Copy size={16} /> {copySuccess ? 'コピーしました！' : 'テキストコピー'}
-              </button>
-              <button className="btn btn-secondary" onClick={() => setScreenshotMode(true)}>
-                <Camera size={16} /> スクショ用画面
-              </button>
-            </>
-          )}
-        </div>
+        <button className="btn btn-primary" onClick={() => handleAutoGenerate(0)} style={{ fontSize: '0.85rem', padding: '0.6rem 1.25rem' }}>
+          <Play size={16} /> 全体を自動生成
+        </button>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
           <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
