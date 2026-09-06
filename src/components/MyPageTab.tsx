@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import type { ScheduleState, Assignment, Song, Instrument } from '../types';
 import { calculateNumSlots, getSlotTimeRange, formatPartName } from '../utils/scheduler';
-import { User, MapPin, AlertCircle, CheckCircle, Clock, Info } from 'lucide-react';
+import { User, MapPin, AlertCircle, CheckCircle, Clock, Info, ChevronDown, ChevronUp } from 'lucide-react';
 
 interface MyPageTabProps {
   state: ScheduleState;
@@ -15,6 +15,7 @@ interface SelectedPart {
 
 export default function MyPageTab({ state }: MyPageTabProps) {
   const [selectedParts, setSelectedParts] = useState<SelectedPart[]>([]);
+  const [isPanelOpen, setIsPanelOpen] = useState(true);
 
   const numSlots = useMemo(() => {
     return calculateNumSlots(
@@ -192,43 +193,104 @@ export default function MyPageTab({ state }: MyPageTabProps) {
       <h1 className="page-title">個人時間割（マイページ）</h1>
       <p className="page-subtitle">ご自身の担当パートを選択すると、本日の練習スケジュールと移動指示が表示されます。</p>
 
-      {/* Part Selection Panel */}
-      <div className="glass-card" style={{ marginBottom: '2rem' }}>
-        <h2 style={{ fontSize: '1.1rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <User size={18} className="badge-primary" />
-          担当パートを選択してください (複数選択可)
-        </h2>
-
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', maxHeight: '250px', overflowY: 'auto', padding: '0.25rem' }}>
-          {state.songs.map(song => {
-            const songParts = availableParts.filter(p => p.song.id === song.id);
-            if (songParts.length === 0) return null;
-            return (
-              <div key={song.id}>
-                <div style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.35rem' }}>
-                  {song.name}
-                </div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
-                  {songParts.map(item => {
-                    const isSelected = selectedParts.some(
-                      p => p.songId === item.song.id && p.instrumentId === item.inst.id && p.partIndex === item.partIndex
-                    );
-                    return (
-                      <button
-                        key={item.key}
-                        onClick={() => togglePartSelection(item.song.id, item.inst.id, item.partIndex)}
-                        className={`btn ${isSelected ? 'btn-primary' : 'btn-secondary'}`}
-                        style={{ padding: '0.45rem 0.7rem', fontSize: '0.78rem', fontWeight: 500, minHeight: '36px' }}
-                      >
-                        {formatPartName(item.inst.id, item.partIndex, item.song.id, state.songs, state.instruments)}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })}
+      {/* Part Selection Panel (Collapsible) */}
+      <div className="glass-card" style={{ marginBottom: '1.5rem', padding: '1rem' }}>
+        <div
+          className="part-selector-header"
+          onClick={() => setIsPanelOpen(!isPanelOpen)}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+            <h2 style={{ fontSize: '1rem', margin: 0, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+              <User size={18} style={{ color: 'var(--primary)' }} />
+              担当パート
+            </h2>
+            {selectedParts.length > 0 ? (
+              <span className="badge badge-primary" style={{ fontSize: '0.72rem' }}>
+                {selectedParts.length}パート選択中
+              </span>
+            ) : (
+              <span className="badge badge-secondary" style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                未選択
+              </span>
+            )}
+          </div>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            style={{ padding: '0.25rem 0.6rem', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsPanelOpen(!isPanelOpen);
+            }}
+          >
+            {isPanelOpen ? (
+              <>
+                <span>閉じる</span>
+                <ChevronUp size={14} />
+              </>
+            ) : (
+              <>
+                <span>変更する</span>
+                <ChevronDown size={14} />
+              </>
+            )}
+          </button>
         </div>
+
+        {/* 折りたたみ時: 選択中パートのコンパクト一覧 */}
+        {!isPanelOpen && selectedParts.length > 0 && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem', marginTop: '0.6rem', paddingTop: '0.6rem', borderTop: '1px solid var(--border-color)' }}>
+            {selectedParts.map((sp, idx) => {
+              const song = state.songs.find(s => s.id === sp.songId);
+              return (
+                <span
+                  key={idx}
+                  className="badge badge-primary"
+                  style={{ fontSize: '0.75rem', padding: '0.25rem 0.5rem' }}
+                >
+                  {song ? `${song.name}: ` : ''}{formatPartName(sp.instrumentId, sp.partIndex, sp.songId, state.songs, state.instruments)}
+                </span>
+              );
+            })}
+          </div>
+        )}
+
+        {/* 展開時: パート選択ボタングループ */}
+        {isPanelOpen && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', maxHeight: '250px', overflowY: 'auto', padding: '0.25rem', marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px solid var(--border-color)' }}>
+            <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: 0 }}>
+              あなたが担当するパートをタップしてください (複数選択可)
+            </p>
+            {state.songs.map(song => {
+              const songParts = availableParts.filter(p => p.song.id === song.id);
+              if (songParts.length === 0) return null;
+              return (
+                <div key={song.id}>
+                  <div style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.35rem' }}>
+                    {song.name}
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
+                    {songParts.map(item => {
+                      const isSelected = selectedParts.some(
+                        p => p.songId === item.song.id && p.instrumentId === item.inst.id && p.partIndex === item.partIndex
+                      );
+                      return (
+                        <button
+                          key={item.key}
+                          onClick={() => togglePartSelection(item.song.id, item.inst.id, item.partIndex)}
+                          className={`btn ${isSelected ? 'btn-primary' : 'btn-secondary'}`}
+                          style={{ padding: '0.45rem 0.7rem', fontSize: '0.78rem', fontWeight: 500, minHeight: '36px' }}
+                        >
+                          {formatPartName(item.inst.id, item.partIndex, item.song.id, state.songs, state.instruments)}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* Personal Schedule Display */}
@@ -272,76 +334,83 @@ export default function MyPageTab({ state }: MyPageTabProps) {
             return (
               <div key={item.slotIndex} className={cardClass}>
                 {/* 1. 時間帯 */}
-                <div style={{ display: 'flex', flexDirection: 'column' }}>
-                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600 }}>コマ {item.slotIndex + 1}</span>
-                  <strong style={{ fontSize: '1.1rem', color: 'var(--text-primary)' }}>{timeRange.start} - {timeRange.end}</strong>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.6rem', flexWrap: 'wrap' }}>
+                  <span className="step-tag" style={{ fontSize: '0.75rem', fontWeight: 700 }}>コマ {item.slotIndex + 1}</span>
+                  <strong style={{ fontSize: '1.1rem', color: 'var(--text-primary)', letterSpacing: '0.02em' }}>{timeRange.start} - {timeRange.end}</strong>
                 </div>
 
                 {/* 2. 練習内容と部屋 */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
                   {item.assignment && item.assignment.entryId ? (
                     <>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
                         <span className="badge badge-primary">合同練習</span>
-                        <strong style={{ fontSize: '1rem' }}>
-                          {activeSong?.name} - {state.entries.find(e => e.id === item.assignment?.entryId)?.section}
+                        <strong style={{ fontSize: '1.05rem', color: 'var(--text-primary)' }}>
+                          {activeSong?.name}
                         </strong>
+                        <span style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
+                          {state.entries.find(e => e.id === item.assignment?.entryId)?.section}
+                        </span>
                       </div>
-                      <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                        <MapPin size={14} />
-                        場所: <strong>{item.room?.name}</strong> (定員: {item.room?.capacity}人)
+                      <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '0.3rem', flexWrap: 'wrap' }}>
+                        <MapPin size={15} style={{ color: 'var(--primary)', flexShrink: 0 }} />
+                        <span>練習場所: <strong style={{ color: 'var(--text-primary)' }}>{item.room?.name}</strong> (定員: {item.room?.capacity}人)</span>
                       </div>
-                      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                        アサインされた担当: {item.activePart ? formatPartName(item.activePart.instrumentId, item.activePart.partIndex, item.activePart.songId, state.songs, state.instruments) : ''}
-                      </div>
+                      {item.activePart && (
+                        <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                          担当: {formatPartName(item.activePart.instrumentId, item.activePart.partIndex, item.activePart.songId, state.songs, state.instruments)}
+                        </div>
+                      )}
                     </>
                   ) : item.isPersonal ? (
                     <>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
                         <span className="badge badge-info">個人練習</span>
                         <strong style={{ fontSize: '1.05rem', color: '#22d3ee' }}>個人練習 / 自習</strong>
                       </div>
-                      <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                        <MapPin size={14} />
-                        場所: <strong>{item.room?.name}</strong> (個人練習部屋として兼用中)
+                      <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '0.3rem', flexWrap: 'wrap' }}>
+                        <MapPin size={15} style={{ color: 'var(--info)', flexShrink: 0 }} />
+                        <span>練習場所: <strong style={{ color: 'var(--text-primary)' }}>{item.room?.name}</strong> (兼用中)</span>
                       </div>
-                      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                        対象パート: {item.activePart ? formatPartName(item.activePart.instrumentId, item.activePart.partIndex, item.activePart.songId, state.songs, state.instruments) : ''}
-                      </div>
+                      {item.activePart && (
+                        <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                          パート: {formatPartName(item.activePart.instrumentId, item.activePart.partIndex, item.activePart.songId, state.songs, state.instruments)}
+                        </div>
+                      )}
                     </>
                   ) : (
-                    <div style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>
-                      このコマは練習アサインがありません (待機・自由時間)
+                    <div style={{ color: 'var(--text-muted)', fontStyle: 'italic', fontSize: '0.85rem' }}>
+                      ☕ このコマは練習アサインがありません (待機・自由時間)
                     </div>
                   )}
                 </div>
 
                 {/* 3. 移動指示 */}
-                <div className="mypage-move-badge" style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                <div className="mypage-move-badge">
                   {isLastSlot ? (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-                      <Clock size={16} />
-                      <span>本日の練習は以上です</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: 'var(--text-muted)', fontSize: '0.82rem', padding: '0.3rem 0' }}>
+                      <Clock size={16} style={{ flexShrink: 0 }} />
+                      <span>🏁 本日の練習は以上です（お疲れ様でした）</span>
                     </div>
                   ) : isMoveRequired ? (
-                    <div className="badge badge-danger" style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', padding: '0.5rem 0.75rem', borderRadius: 'var(--radius-md)' }}>
-                      <AlertCircle size={16} />
-                      <div style={{ textAlign: 'left', fontSize: '0.75rem' }}>
-                        <div style={{ fontWeight: 700 }}>要 {state.timeSettings.intervalDuration}分前退室</div>
-                        <div>次の部屋「{state.rooms.find(r => r.id === nextRoomId)?.name}」へ移動</div>
+                    <div className="badge badge-danger" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.55rem 0.85rem', borderRadius: 'var(--radius-md)' }}>
+                      <AlertCircle size={18} style={{ flexShrink: 0 }} />
+                      <div style={{ textAlign: 'left', fontSize: '0.78rem', lineHeight: 1.4 }}>
+                        <div style={{ fontWeight: 700 }}>🔴 要 {state.timeSettings.intervalDuration}分前退室</div>
+                        <div>➔ 次の部屋「<strong>{state.rooms.find(r => r.id === nextRoomId)?.name}</strong>」へ移動</div>
                       </div>
                     </div>
                   ) : isStayOK ? (
-                    <div className="badge badge-success" style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', padding: '0.5rem 0.75rem', borderRadius: 'var(--radius-md)' }}>
-                      <CheckCircle size={16} />
-                      <div style={{ textAlign: 'left', fontSize: '0.75rem' }}>
-                        <div style={{ fontWeight: 700 }}>移動なし (居残り)</div>
-                        <div>インターバル中もノンストップ練習可能</div>
+                    <div className="badge badge-success" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.55rem 0.85rem', borderRadius: 'var(--radius-md)' }}>
+                      <CheckCircle size={18} style={{ flexShrink: 0 }} />
+                      <div style={{ textAlign: 'left', fontSize: '0.78rem', lineHeight: 1.4 }}>
+                        <div style={{ fontWeight: 700 }}>🟢 移動なし (居残り)</div>
+                        <div>インターバル中もこの部屋で練習可能</div>
                       </div>
                     </div>
                   ) : (
                     <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                      次のスケジュール: {nextItem?.assignment?.entryId || nextItem?.isPersonal ? 'あり' : 'なし'}
+                      次のコマ: {nextItem?.assignment?.entryId || nextItem?.isPersonal ? '練習あり' : 'なし'}
                     </div>
                   )}
                 </div>
