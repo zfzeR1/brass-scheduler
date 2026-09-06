@@ -8,6 +8,7 @@ import type {
   Entry,
   PartReference
 } from '../types';
+import { STANDARD_PART_COUNTS } from '../types';
 import { Plus, Trash2, Clock, MapPin, ShieldAlert, Award, FileText, CheckSquare, Square, ArrowUp, ArrowDown, Edit3 } from 'lucide-react';
 import { formatPartName } from '../utils/scheduler';
 
@@ -91,7 +92,7 @@ export default function MasterDataTab({ state, setState }: MasterDataTabProps) {
   const getDefaultSongParts = (): { [instId: string]: number } => {
     const defaults: { [instId: string]: number } = {};
     state.instruments.forEach(inst => {
-      defaults[inst.id] = 1;
+      defaults[inst.id] = STANDARD_PART_COUNTS[inst.id] ?? 1;
     });
     return defaults;
   };
@@ -557,31 +558,34 @@ export default function MasterDataTab({ state, setState }: MasterDataTabProps) {
 
               <div className="form-group">
                 <label className="form-label">パート編成 (各楽器のパート数)</label>
-                <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: '0 0 0.5rem 0' }}>登録済み楽器がデフォルト表示されます。未入力の場合はパート数1で登録されます。</p>
+                <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: '0 0 0.5rem 0' }}>標準パート数が自動セットされています。使わない楽器は0に設定してください。</p>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '0.5rem', maxHeight: '300px', overflowY: 'auto', padding: '0.25rem' }}>
-                  {state.instruments.map(inst => (
-                    <div key={inst.id} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <span style={{ fontSize: '0.85rem', flex: '1', minWidth: '100px', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
-                        {inst.name}
-                      </span>
-                      <input
-                        type="number"
-                        min="0"
-                        max="4"
-                        placeholder="1"
-                        className="form-control"
-                        style={{ padding: '0.35rem', width: '60px' }}
-                        value={tempSongParts[inst.id] ?? ''}
-                        onChange={e => {
-                          const val = Math.max(0, Math.min(4, Number(e.target.value)));
-                          setTempSongParts(prev => ({
-                            ...prev,
-                            [inst.id]: val
-                          }));
-                        }}
-                      />
-                    </div>
-                  ))}
+                  {state.instruments.map(inst => {
+                    const defaultCount = STANDARD_PART_COUNTS[inst.id] ?? 1;
+                    return (
+                      <div key={inst.id} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <span style={{ fontSize: '0.85rem', flex: '1', minWidth: '100px', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                          {inst.name}
+                        </span>
+                        <input
+                          type="number"
+                          min="0"
+                          max="4"
+                          placeholder={String(defaultCount)}
+                          className="form-control"
+                          style={{ padding: '0.35rem', width: '60px' }}
+                          value={tempSongParts[inst.id] ?? defaultCount}
+                          onChange={e => {
+                            const val = Math.max(0, Math.min(4, Number(e.target.value)));
+                            setTempSongParts(prev => ({
+                              ...prev,
+                              [inst.id]: val
+                            }));
+                          }}
+                        />
+                      </div>
+                    );
+                  })}
                   {/* Song-specific extra instruments */}
                   {songExtraInstruments.map(inst => (
                     <div key={inst.id} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>

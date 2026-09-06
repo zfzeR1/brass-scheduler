@@ -552,7 +552,7 @@ export function generateSchedule(
   return finalAssignments;
 }
 
-// パート数を考慮したパート表記名フォーマッター
+// パート数を考慮したパート表記名フォーマッター (単一パートは数字なし、複数パートは「楽器名 数字」)
 export function formatPartName(
   instrumentId: string,
   partIndex: number,
@@ -564,14 +564,12 @@ export function formatPartName(
   const instName = inst ? inst.name : instrumentId;
 
   if (!songId) {
-    const ordinal = partIndex === 0 ? '1st' : partIndex === 1 ? '2nd' : partIndex === 2 ? '3rd' : `${partIndex + 1}th`;
-    return `${instName} ${ordinal}`;
+    return partIndex === 0 ? instName : `${instName} ${partIndex + 1}`;
   }
 
   const song = songs.find(s => s.id === songId);
   if (!song) {
-    const ordinal = partIndex === 0 ? '1st' : partIndex === 1 ? '2nd' : partIndex === 2 ? '3rd' : `${partIndex + 1}th`;
-    return `${instName} ${ordinal}`;
+    return partIndex === 0 ? instName : `${instName} ${partIndex + 1}`;
   }
 
   const partCount = song.parts[instrumentId] || 0;
@@ -579,6 +577,5 @@ export function formatPartName(
     return instName;
   }
 
-  const ordinal = partIndex === 0 ? '1st' : partIndex === 1 ? '2nd' : partIndex === 2 ? '3rd' : `${partIndex + 1}th`;
-  return `${instName} ${ordinal}`;
+  return `${instName} ${partIndex + 1}`;
 }

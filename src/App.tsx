@@ -3,10 +3,13 @@ import type {
   ScheduleState,
   TimeSettings,
   Room,
-  Instrument,
   Song,
   DuplicateNGPair,
   Entry
+} from './types';
+import {
+  STANDARD_INSTRUMENTS,
+  STANDARD_PART_COUNTS
 } from './types';
 import MasterDataTab from './components/MasterDataTab';
 import ScheduleTab from './components/ScheduleTab';
@@ -52,32 +55,27 @@ const INITIAL_TIME_SETTINGS: TimeSettings = {
   intervalDuration: 5
 };
 
-const INITIAL_INSTRUMENTS: Instrument[] = [
-  { id: 'perc', name: 'パーカッション', movementType: 'immovable' },
-  { id: 'tuba', name: 'チューバ', movementType: 'avoid_movement' },
-  { id: 'trb', name: 'トロンボーン', movementType: 'avoid_movement' },
-  { id: 'hrn', name: 'ホルン', movementType: 'movable' },
-  { id: 'tpt', name: 'トランペット', movementType: 'movable' },
-  { id: 'fl', name: 'フルート', movementType: 'movable' }
-];
-
 const INITIAL_ROOMS: Room[] = [
-  { id: 'room-perc', name: '打楽器室', capacity: 6, isPersonalPracticeCandidate: true, permanentInstrumentId: 'perc' },
-  { id: 'room-music', name: '音楽室', capacity: 15, isPersonalPracticeCandidate: true },
-  { id: 'room-med1', name: '中練習室1', capacity: 6, isPersonalPracticeCandidate: true },
-  { id: 'room-med2', name: '中練習室2', capacity: 6, isPersonalPracticeCandidate: true }
+  { id: 'room-perc', name: '打楽器室', capacity: 6, isPersonalPracticeCandidate: true, permanentInstrumentId: 'timp' },
+  { id: 'room-music', name: '音楽室', capacity: 20, isPersonalPracticeCandidate: true },
+  { id: 'room-med1', name: '中練習室1', capacity: 8, isPersonalPracticeCandidate: true },
+  { id: 'room-med2', name: '中練習室2', capacity: 8, isPersonalPracticeCandidate: true }
 ];
 
 const INITIAL_SONGS: Song[] = [
   {
     id: 'song-alv',
     name: 'アルヴァマー序曲',
-    parts: { fl: 2, tpt: 3, hrn: 4, trb: 3, tuba: 1, perc: 4 }
+    parts: { ...STANDARD_PART_COUNTS }
   },
   {
     id: 'song-disco',
     name: 'ディスコ・キッド',
-    parts: { fl: 1, tpt: 2, hrn: 2, trb: 2, tuba: 1, perc: 3 }
+    parts: {
+      fl: 2, picc: 1, ob: 1, bsn: 1, ebcl: 1, bbcl: 3, bcl: 1,
+      asax: 2, tsax: 1, bsax: 1, trp: 3, hrn: 4, trb: 3, euph: 1, tuba: 1,
+      stbs: 1, timp: 1, perc: 4
+    }
   }
 ];
 
@@ -103,10 +101,12 @@ const INITIAL_ENTRIES: Entry[] = [
     parts: [
       { instrumentId: 'fl', partIndex: 0 },
       { instrumentId: 'fl', partIndex: 1 },
+      { instrumentId: 'picc', partIndex: 0 },
+      { instrumentId: 'ob', partIndex: 0 },
+      { instrumentId: 'bbcl', partIndex: 0 },
+      { instrumentId: 'bbcl', partIndex: 1 },
       { instrumentId: 'hrn', partIndex: 0 },
       { instrumentId: 'hrn', partIndex: 1 },
-      { instrumentId: 'hrn', partIndex: 2 },
-      { instrumentId: 'hrn', partIndex: 3 },
       { instrumentId: 'perc', partIndex: 0 },
       { instrumentId: 'perc', partIndex: 1 }
     ]
@@ -117,12 +117,13 @@ const INITIAL_ENTRIES: Entry[] = [
     section: 'C〜D (45-68小節)',
     priority: 'high',
     parts: [
-      { instrumentId: 'tpt', partIndex: 0 },
-      { instrumentId: 'tpt', partIndex: 1 },
-      { instrumentId: 'tpt', partIndex: 2 },
+      { instrumentId: 'trp', partIndex: 0 },
+      { instrumentId: 'trp', partIndex: 1 },
+      { instrumentId: 'trp', partIndex: 2 },
       { instrumentId: 'trb', partIndex: 0 },
       { instrumentId: 'trb', partIndex: 1 },
       { instrumentId: 'trb', partIndex: 2 },
+      { instrumentId: 'euph', partIndex: 0 },
       { instrumentId: 'tuba', partIndex: 0 }
     ]
   },
@@ -133,8 +134,10 @@ const INITIAL_ENTRIES: Entry[] = [
     priority: 'medium',
     parts: [
       { instrumentId: 'fl', partIndex: 0 },
-      { instrumentId: 'tpt', partIndex: 0 },
-      { instrumentId: 'tpt', partIndex: 1 },
+      { instrumentId: 'asax', partIndex: 0 },
+      { instrumentId: 'asax', partIndex: 1 },
+      { instrumentId: 'trp', partIndex: 0 },
+      { instrumentId: 'trp', partIndex: 1 },
       { instrumentId: 'perc', partIndex: 0 },
       { instrumentId: 'perc', partIndex: 1 },
       { instrumentId: 'perc', partIndex: 2 }
@@ -173,11 +176,11 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<TabKey>('master');
   const [shareCopied, setShareCopied] = useState(false);
   const [state, setState] = useState<ScheduleState>(() => {
-    const saved = localStorage.getItem('antigravity_schedule_state');
+    const saved = localStorage.getItem('antigravity_schedule_state_v3');
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        if (parsed.rooms && parsed.songs && parsed.entries) {
+        if (parsed.rooms && parsed.songs && parsed.entries && parsed.instruments?.length >= 19) {
           return parsed;
         }
       } catch (e) {
@@ -187,7 +190,7 @@ export default function App() {
     return {
       timeSettings: INITIAL_TIME_SETTINGS,
       rooms: INITIAL_ROOMS,
-      instruments: INITIAL_INSTRUMENTS,
+      instruments: STANDARD_INSTRUMENTS,
       songs: INITIAL_SONGS,
       duplicateNGPairs: INITIAL_NG_PAIRS,
       entries: INITIAL_ENTRIES,
@@ -229,7 +232,7 @@ export default function App() {
   // 状態の自動保存
   useEffect(() => {
     if (!isMemberMode) {
-      localStorage.setItem('antigravity_schedule_state', JSON.stringify(state));
+      localStorage.setItem('antigravity_schedule_state_v3', JSON.stringify(state));
     }
   }, [state, isMemberMode]);
 
