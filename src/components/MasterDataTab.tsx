@@ -9,7 +9,7 @@ import type {
   PartReference
 } from '../types';
 import { STANDARD_PART_COUNTS } from '../types';
-import { Plus, Trash2, Clock, MapPin, ShieldAlert, Award, FileText, CheckSquare, Square, ArrowUp, ArrowDown, Edit3, ChevronRight } from 'lucide-react';
+import { Plus, Trash2, Clock, MapPin, CheckSquare, Square, ArrowUp, ArrowDown, Edit3, ChevronRight } from 'lucide-react';
 import { formatPartName } from '../utils/scheduler';
 
 interface MasterDataTabProps {
@@ -401,7 +401,7 @@ export default function MasterDataTab({ state, setState, onProceedToSchedule }: 
       <div className="status-dashboard glass-card" style={{ marginBottom: '1.5rem', padding: '0.85rem 1rem' }}>
         <div style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.6rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
           <CheckSquare size={16} style={{ color: 'var(--primary)' }} />
-          <span>準備状況ダッシュボード（タップして各項目へ移動）</span>
+          <span>設定ステップ（タップで項目を切り替え）</span>
         </div>
         <div className="dashboard-grid">
           {/* 1-1 時間・部屋 */}
@@ -472,26 +472,6 @@ export default function MasterDataTab({ state, setState, onProceedToSchedule }: 
             </div>
           </div>
         </div>
-      </div>
-
-      {/* Sub Tabs */}
-      <div className="nav-links" style={{ flexDirection: 'row', marginBottom: '1.5rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.75rem', flexWrap: 'wrap', gap: '0.35rem' }}>
-        <button className={`nav-btn ${subTab === 'settings' ? 'active' : ''}`} onClick={() => setSubTab('settings')}>
-          <Clock size={16} />
-          1-1 基本設定(時間・部屋)
-        </button>
-        <button className={`nav-btn ${subTab === 'songs' ? 'active' : ''}`} onClick={() => setSubTab('songs')}>
-          <FileText size={16} />
-          1-2 曲・パート編成
-        </button>
-        <button className={`nav-btn ${subTab === 'ng-pairs' ? 'active' : ''}`} onClick={() => setSubTab('ng-pairs')}>
-          <ShieldAlert size={16} />
-          1-3 重複NG (任意)
-        </button>
-        <button className={`nav-btn ${subTab === 'entries' ? 'active' : ''}`} onClick={() => setSubTab('entries')}>
-          <Award size={16} />
-          1-4 セクション練習 (必須)
-        </button>
       </div>
 
       {/* SUB TAB: BASIC SETTINGS */}
