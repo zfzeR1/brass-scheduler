@@ -5,7 +5,8 @@ import type {
   Room,
   Song,
   DuplicateNGPair,
-  Entry
+  Entry,
+  Assignment
 } from './types';
 import {
   STANDARD_INSTRUMENTS,
@@ -14,37 +15,176 @@ import {
 import MasterDataTab from './components/MasterDataTab';
 import ScheduleTab from './components/ScheduleTab';
 import MyPageTab from './components/MyPageTab';
-import { Music, Settings, Calendar, Share2, Info, ChevronRight, Copy, ExternalLink } from 'lucide-react';
+import { Music, Settings, Calendar, Share2, Info, ChevronRight, Copy, ExternalLink, Smartphone, MessageCircle, X } from 'lucide-react';
+import { deflate, inflate } from 'pako';
+import { QRCodeSVG } from 'qrcode.react';
 
-// --- スケジュールデータの圧縮エンコード/デコード (Unicode対応) ---
-function encodeScheduleData(data: ScheduleState): string {
-  const json = JSON.stringify({
-    timeSettings: data.timeSettings,
-    rooms: data.rooms,
-    instruments: data.instruments,
-    songs: data.songs,
-    entries: data.entries,
-    assignments: data.assignments,
-    duplicateNGPairs: data.duplicateNGPairs
-  });
-  const bytes = new TextEncoder().encode(json);
+// --- Base64url ユーティリティ (URLセーフ, +/= を使わない) ---
+function toBase64Url(bytes: Uint8Array): string {
   const binary = Array.from(bytes, (b) => String.fromCharCode(b)).join('');
-  return btoa(binary);
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+function fromBase64Url(str: string): Uint8Array {
+  let b64 = str.replace(/-/g, '+').replace(/_/g, '/');
+  while (b64.length % 4 !== 0) b64 += '=';
+  const binary = atob(b64);
+  return Uint8Array.from(binary, (c) => c.charCodeAt(0));
+}
+
+// --- ミニファイ: ScheduleState → 軽量ペイロード ---
+interface MiniPayload {
+  t: { s: string; e: string; d: number; i: number };
+  r: Array<{ id: string; n: string; c: number; p?: 1; pi?: string }>;
+  s: Array<{ id: string; n: string; p: Record<string, number> }>;
+  e: Array<{ id: string; sId: string; s: string; pr: string; p: Array<[string, number]> }>;
+  a: Array<{ s: number; r: string; e?: string; pp?: 1; pt?: Array<{ i: string; pi: number; sId?: string }> }>;
+  ng: Array<{ id: string; a: [string, string, number]; b: [string, string, number] }>;
+}
+
+function minifyState(data: ScheduleState): MiniPayload {
+  return {
+    t: {
+      s: data.timeSettings.startTime,
+      e: data.timeSettings.endTime,
+      d: data.timeSettings.slotDuration,
+      i: data.timeSettings.intervalDuration
+    },
+    r: data.rooms.map(r => {
+      const mini: MiniPayload['r'][0] = { id: r.id, n: r.name, c: r.capacity };
+      if (r.isPersonalPracticeCandidate) mini.p = 1;
+      if (r.permanentInstrumentId) mini.pi = r.permanentInstrumentId;
+      return mini;
+    }),
+    s: data.songs.map(s => ({ id: s.id, n: s.name, p: s.parts })),
+    e: data.entries.map(e => ({
+      id: e.id,
+      sId: e.songId,
+      s: e.section,
+      pr: e.priority,
+      p: e.parts.map(p => [p.instrumentId, p.partIndex] as [string, number])
+    })),
+    // 空き部屋の枠は除外してデータ量を削減
+    a: data.assignments
+      .filter(a => a.entryId || a.isPersonalPractice)
+      .map(a => {
+        const mini: MiniPayload['a'][0] = { s: a.slotIndex, r: a.roomId };
+        if (a.entryId) mini.e = a.entryId;
+        if (a.isPersonalPractice) mini.pp = 1;
+        if (a.parts.length > 0) {
+          mini.pt = a.parts.map(p => {
+            const pt: { i: string; pi: number; sId?: string } = { i: p.instrumentId, pi: p.partIndex };
+            if (p.songId) pt.sId = p.songId;
+            return pt;
+          });
+        }
+        return mini;
+      }),
+    ng: data.duplicateNGPairs.map(ng => ({
+      id: ng.id,
+      a: [ng.partA.songId, ng.partA.instrumentId, ng.partA.partIndex] as [string, string, number],
+      b: [ng.partB.songId, ng.partB.instrumentId, ng.partB.partIndex] as [string, string, number]
+    }))
+  };
+}
+
+function expandPayload(mini: MiniPayload): ScheduleState {
+  const rooms: Room[] = mini.r.map(r => ({
+    id: r.id,
+    name: r.n,
+    capacity: r.c,
+    isPersonalPracticeCandidate: !!r.p,
+    permanentInstrumentId: r.pi
+  }));
+
+  const songs: Song[] = mini.s.map(s => ({ id: s.id, name: s.n, parts: s.p }));
+
+  const entries: Entry[] = mini.e.map(e => ({
+    id: e.id,
+    songId: e.sId,
+    section: e.s,
+    priority: e.pr as 'high' | 'medium' | 'low',
+    parts: e.p.map(([instrumentId, partIndex]) => ({ instrumentId, partIndex }))
+  }));
+
+  // assignments を復元（ミニ化されたものだけでなく、空き枠も復元する）
+  const assignments: Assignment[] = mini.a.map(a => ({
+    id: `${a.s}_${a.r}`,
+    slotIndex: a.s,
+    roomId: a.r,
+    entryId: a.e,
+    isPersonalPractice: !!a.pp,
+    isLocked: false,
+    parts: a.pt
+      ? a.pt.map(p => ({ instrumentId: p.i, partIndex: p.pi, songId: p.sId }))
+      : []
+  }));
+
+  const duplicateNGPairs: DuplicateNGPair[] = mini.ng.map(ng => ({
+    id: ng.id,
+    partA: { songId: ng.a[0], instrumentId: ng.a[1], partIndex: ng.a[2] },
+    partB: { songId: ng.b[0], instrumentId: ng.b[1], partIndex: ng.b[2] }
+  }));
+
+  return {
+    timeSettings: {
+      startTime: mini.t.s,
+      endTime: mini.t.e,
+      slotDuration: mini.t.d,
+      intervalDuration: mini.t.i
+    },
+    rooms,
+    instruments: STANDARD_INSTRUMENTS,
+    songs,
+    duplicateNGPairs,
+    entries,
+    assignments
+  };
+}
+
+// --- 圧縮エンコード/デコード (Deflate + Base64url) ---
+function encodeScheduleData(data: ScheduleState): string {
+  const mini = minifyState(data);
+  const json = JSON.stringify(mini);
+  const compressed = deflate(new TextEncoder().encode(json));
+  return toBase64Url(compressed);
 }
 
 function decodeScheduleData(encoded: string): ScheduleState | null {
   try {
-    const binary = atob(encoded);
-    const bytes = Uint8Array.from(binary, (c) => c.charCodeAt(0));
-    const json = new TextDecoder().decode(bytes);
+    const compressed = fromBase64Url(encoded);
+    const decompressed = inflate(compressed);
+    const json = new TextDecoder().decode(decompressed);
     const parsed = JSON.parse(json);
+    // 新フォーマット (ミニファイ済み)
+    if (parsed.t && parsed.r && parsed.s) {
+      return expandPayload(parsed as MiniPayload);
+    }
+    // 旧フォーマット (フルJSON) - 下位互換
     if (parsed.rooms && parsed.songs) {
       return parsed as ScheduleState;
     }
-  } catch (e) {
-    console.error('Failed to decode schedule data', e);
+  } catch {
+    // 新形式Deflateで失敗 → 旧Base64形式を試す
+    try {
+      const binary = atob(encoded);
+      const bytes = Uint8Array.from(binary, (c) => c.charCodeAt(0));
+      const json = new TextDecoder().decode(bytes);
+      const parsed = JSON.parse(json);
+      if (parsed.rooms && parsed.songs) {
+        return parsed as ScheduleState;
+      }
+    } catch (e2) {
+      console.error('Failed to decode schedule data (all formats)', e2);
+    }
   }
   return null;
+}
+
+// --- 共有URLの生成ヘルパー ---
+function generateShareUrl(data: ScheduleState): string {
+  const encoded = encodeScheduleData(data);
+  return `${window.location.origin}${window.location.pathname}#view=member&d=${encoded}`;
 }
 
 // --- 初期データ ---
@@ -174,7 +314,8 @@ export default function App() {
 
   // --- 管理者モード ---
   const [activeTab, setActiveTab] = useState<TabKey>('master');
-  const [shareCopied, setShareCopied] = useState(false);
+  const [shareCopied, setShareCopied] = useState<'url' | 'line' | false>(false);
+  const [showQR, setShowQR] = useState(false);
   const [state, setState] = useState<ScheduleState>(() => {
     const saved = localStorage.getItem('antigravity_schedule_state_v3');
     if (saved) {
@@ -214,11 +355,25 @@ export default function App() {
     return () => mediaQuery.removeEventListener('change', applyTheme);
   }, []);
 
-  // URL パラメータから部員閲覧モードを検出
+  // URL ハッシュ or クエリから部員閲覧モードを検出（新旧形式両対応）
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const view = params.get('view');
-    const data = params.get('d');
+    let view: string | null = null;
+    let data: string | null = null;
+
+    // 1. 新形式: ハッシュ (#view=member&d=...)
+    const hash = window.location.hash.replace(/^#/, '');
+    if (hash) {
+      const hashParams = new URLSearchParams(hash);
+      view = hashParams.get('view');
+      data = hashParams.get('d');
+    }
+
+    // 2. 旧形式フォールバック: クエリ (?view=member&d=...)
+    if (!view || !data) {
+      const queryParams = new URLSearchParams(window.location.search);
+      view = queryParams.get('view');
+      data = queryParams.get('d');
+    }
 
     if (view === 'member' && data) {
       const decoded = decodeScheduleData(data);
@@ -258,16 +413,26 @@ export default function App() {
     setActiveTab(targetTab);
   };
 
-  // 共有リンク生成
-  const handleGenerateShareLink = () => {
-    const encoded = encodeScheduleData(state);
-    const url = `${window.location.origin}${window.location.pathname}?view=member&d=${encoded}`;
+  // 共有URLリンクをコピー
+  const handleCopyShareUrl = () => {
+    const url = generateShareUrl(state);
     navigator.clipboard.writeText(url).then(() => {
-      setShareCopied(true);
+      setShareCopied('url');
       setTimeout(() => setShareCopied(false), 3000);
     }).catch(() => {
-      // Clipboard API非対応の場合、prompt で表示
       window.prompt('以下のURLをコピーしてください:', url);
+    });
+  };
+
+  // LINE用共有メッセージをコピー
+  const handleCopyLineMessage = () => {
+    const url = generateShareUrl(state);
+    const message = `【練習スケジュールのご案内】\n本日の練習スケジュールが決定しました！\n以下のリンクを開き、ご自身の担当パートを選択して時間割・練習場所をご確認ください👇\n\n${url}`;
+    navigator.clipboard.writeText(message).then(() => {
+      setShareCopied('line');
+      setTimeout(() => setShareCopied(false), 3000);
+    }).catch(() => {
+      window.prompt('以下のメッセージをコピーしてください:', message);
     });
   };
 
@@ -413,14 +578,117 @@ export default function App() {
                     部員用共有リンク
                   </h2>
                   <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '1rem', lineHeight: 1.6 }}>
-                    以下のボタンを押してリンクをコピーし、LINEグループ等に貼り付けて部員に共有してください。<br />
+                    以下のボタンでリンクをコピーし、LINEグループ等に貼り付けて部員に共有してください。<br />
                     部員はリンクを開くだけで、自分のパートを選択して個人時間割を確認できます。
                   </p>
-                  <button className="btn btn-primary" onClick={handleGenerateShareLink} style={{ fontSize: '0.95rem', padding: '0.75rem 1.5rem' }}>
-                    <Copy size={16} />
-                    {shareCopied ? '✅ コピーしました！LINEに貼り付けてください' : '部員用リンクをコピー'}
-                  </button>
+
+                  {/* コピーボタン群 */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                    {/* LINE用メッセージをコピー (推奨) */}
+                    <button
+                      className="btn btn-primary"
+                      onClick={handleCopyLineMessage}
+                      style={{ fontSize: '0.92rem', padding: '0.75rem 1.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}
+                    >
+                      <MessageCircle size={16} />
+                      {shareCopied === 'line' ? '✅ LINE用メッセージをコピーしました！' : 'LINE用メッセージをコピー（案内文付き）'}
+                    </button>
+
+                    <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                      {/* URLのみコピー */}
+                      <button
+                        className="btn btn-secondary"
+                        onClick={handleCopyShareUrl}
+                        style={{ flex: 1, fontSize: '0.82rem', padding: '0.6rem 1rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem', minWidth: '140px' }}
+                      >
+                        <Copy size={14} />
+                        {shareCopied === 'url' ? '✅ コピー完了' : 'URLのみコピー'}
+                      </button>
+
+                      {/* QRコード表示 */}
+                      <button
+                        className="btn btn-secondary"
+                        onClick={() => setShowQR(true)}
+                        style={{ flex: 1, fontSize: '0.82rem', padding: '0.6rem 1rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem', minWidth: '140px' }}
+                      >
+                        <Smartphone size={14} />
+                        QRコードを表示
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* コピー成功のヒント */}
+                  {shareCopied && (
+                    <div style={{ marginTop: '0.75rem', fontSize: '0.78rem', color: 'var(--success)', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                      <ExternalLink size={12} />
+                      {shareCopied === 'line'
+                        ? 'LINEグループにそのまま貼り付けてください。案内文が一緒に送信されます。'
+                        : 'URLをコピーしました。LINEやメール等に貼り付けて共有してください。'
+                      }
+                    </div>
+                  )}
                 </div>
+
+                {/* QRコードモーダル */}
+                {showQR && (
+                  <div
+                    className="modal-overlay"
+                    onClick={() => setShowQR(false)}
+                    style={{ zIndex: 1000 }}
+                  >
+                    <div
+                      className="modal-content"
+                      onClick={e => e.stopPropagation()}
+                      style={{ maxWidth: '400px', width: '90%', textAlign: 'center' }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                        <h2 style={{ fontSize: '1.1rem', fontWeight: 700, margin: 0 }}>
+                          📱 部員用QRコード
+                        </h2>
+                        <button
+                          className="btn btn-secondary btn-icon"
+                          onClick={() => setShowQR(false)}
+                          style={{ border: 'none', background: 'transparent', padding: '4px' }}
+                        >
+                          <X size={18} />
+                        </button>
+                      </div>
+
+                      <div
+                        style={{
+                          background: '#ffffff',
+                          borderRadius: 'var(--radius-md)',
+                          padding: '1.5rem',
+                          display: 'inline-block',
+                          marginBottom: '1rem'
+                        }}
+                      >
+                        <QRCodeSVG
+                          value={generateShareUrl(state)}
+                          size={256}
+                          level="M"
+                          includeMargin={false}
+                        />
+                      </div>
+
+                      <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+                        スマホのカメラをかざすだけで<br />
+                        個人時間割が開けます。<br />
+                        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                          iPadやプロジェクターに映すと便利です
+                        </span>
+                      </p>
+
+                      <button
+                        className="btn btn-secondary"
+                        onClick={() => setShowQR(false)}
+                        style={{ marginTop: '0.75rem', fontSize: '0.85rem', padding: '0.5rem 1.5rem' }}
+                      >
+                        閉じる
+                      </button>
+                    </div>
+                  </div>
+                )}
 
                 {/* 区切り */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', margin: '2rem 0' }}>
