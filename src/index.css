@@ -481,6 +481,10 @@ body {
   border-color: var(--text-muted);
 }
 
+.practice-card:active {
+  cursor: grabbing;
+}
+
 .practice-card.is-locked {
   border-left: 3px solid var(--warning);
 }
