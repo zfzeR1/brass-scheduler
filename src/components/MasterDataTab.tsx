@@ -12,6 +12,14 @@ import { STANDARD_PART_COUNTS } from '../types';
 import { Plus, Trash2, Clock, MapPin, CheckSquare, Square, ArrowUp, ArrowDown, Edit3, ChevronRight } from 'lucide-react';
 import { formatPartName } from '../utils/scheduler';
 
+const PART_COUNT_OPTIONS = [
+  { value: 0, label: '-' },
+  { value: 1, label: '1st' },
+  { value: 2, label: '2nd' },
+  { value: 3, label: '3rd' },
+  { value: 4, label: '4th' }
+];
+
 interface MasterDataTabProps {
   state: ScheduleState;
   setState: React.Dispatch<React.SetStateAction<ScheduleState>>;
@@ -655,7 +663,7 @@ export default function MasterDataTab({ state, setState, onProceedToSchedule }: 
 
               <div className="form-group">
                 <label className="form-label">パート編成 (各楽器のパート数)</label>
-                <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: '0 0 0.5rem 0' }}>標準パート数が自動セットされています。使わない楽器は0に設定してください。</p>
+                <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: '0 0 0.5rem 0' }}>標準パート数が自動セットされています。使わない楽器は「-」に設定してください。</p>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '0.5rem', maxHeight: '300px', overflowY: 'auto', padding: '0.25rem' }}>
                   {state.instruments.map(inst => {
                     const defaultCount = STANDARD_PART_COUNTS[inst.id] ?? 1;
@@ -664,22 +672,22 @@ export default function MasterDataTab({ state, setState, onProceedToSchedule }: 
                         <span style={{ fontSize: '0.85rem', flex: '1', minWidth: '100px', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
                           {inst.name}
                         </span>
-                        <input
-                          type="number"
-                          min="0"
-                          max="4"
-                          placeholder={String(defaultCount)}
+                        <select
                           className="form-control"
-                          style={{ padding: '0.35rem', width: '60px' }}
+                          style={{ padding: '0.35rem 0.4rem', width: '75px', fontSize: '0.85rem' }}
                           value={tempSongParts[inst.id] ?? defaultCount}
                           onChange={e => {
-                            const val = Math.max(0, Math.min(4, Number(e.target.value)));
+                            const val = Number(e.target.value);
                             setTempSongParts(prev => ({
                               ...prev,
                               [inst.id]: val
                             }));
                           }}
-                        />
+                        >
+                          {PART_COUNT_OPTIONS.map(opt => (
+                            <option key={opt.value} value={opt.value}>{opt.label}</option>
+                          ))}
+                        </select>
                       </div>
                     );
                   })}
@@ -689,22 +697,22 @@ export default function MasterDataTab({ state, setState, onProceedToSchedule }: 
                       <span style={{ fontSize: '0.85rem', flex: '1', minWidth: '100px', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', color: 'var(--primary)' }}>
                         {inst.name} <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>(追加)</span>
                       </span>
-                      <input
-                        type="number"
-                        min="0"
-                        max="4"
-                        placeholder="1"
+                      <select
                         className="form-control"
-                        style={{ padding: '0.35rem', width: '60px' }}
-                        value={tempSongParts[inst.id] ?? ''}
+                        style={{ padding: '0.35rem 0.4rem', width: '75px', fontSize: '0.85rem' }}
+                        value={tempSongParts[inst.id] ?? 1}
                         onChange={e => {
-                          const val = Math.max(0, Math.min(4, Number(e.target.value)));
+                          const val = Number(e.target.value);
                           setTempSongParts(prev => ({
                             ...prev,
                             [inst.id]: val
                           }));
                         }}
-                      />
+                      >
+                        {PART_COUNT_OPTIONS.map(opt => (
+                          <option key={opt.value} value={opt.value}>{opt.label}</option>
+                        ))}
+                      </select>
                       <button
                         type="button"
                         className="btn btn-secondary btn-icon"
@@ -787,24 +795,25 @@ export default function MasterDataTab({ state, setState, onProceedToSchedule }: 
 
                       {isEditing ? (
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '0.4rem', padding: '0.5rem', background: 'rgba(255,255,255,0.02)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-color)' }}>
-                          <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: '0 0 0.25rem 0' }}>パート数を変更 (0にすると削除)</p>
+                          <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: '0 0 0.25rem 0' }}>パート数を変更 (「-」にすると編成から除外)</p>
                           {state.instruments.map(inst => (
                             <div key={inst.id} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                               <span style={{ fontSize: '0.82rem', flex: '1', minWidth: '100px', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
                                 {inst.name}
                               </span>
-                              <input
-                                type="number"
-                                min="0"
-                                max="4"
+                              <select
                                 className="form-control"
-                                style={{ padding: '0.3rem', width: '55px', fontSize: '0.82rem' }}
+                                style={{ padding: '0.3rem 0.45rem', width: '75px', fontSize: '0.82rem' }}
                                 value={editSongParts[inst.id] ?? 0}
                                 onChange={e => {
-                                  const val = Math.max(0, Math.min(4, Number(e.target.value)));
+                                  const val = Number(e.target.value);
                                   setEditSongParts(prev => ({ ...prev, [inst.id]: val }));
                                 }}
-                              />
+                              >
+                                {PART_COUNT_OPTIONS.map(opt => (
+                                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                ))}
+                              </select>
                             </div>
                           ))}
                           {/* Extra instruments only in this song */}
@@ -815,18 +824,19 @@ export default function MasterDataTab({ state, setState, onProceedToSchedule }: 
                               return (
                                 <div key={instId} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                                   <span style={{ fontSize: '0.82rem', flex: '1', color: 'var(--text-muted)' }}>{instName}</span>
-                                  <input
-                                    type="number"
-                                    min="0"
-                                    max="4"
+                                  <select
                                     className="form-control"
-                                    style={{ padding: '0.3rem', width: '55px', fontSize: '0.82rem' }}
+                                    style={{ padding: '0.3rem 0.45rem', width: '75px', fontSize: '0.82rem' }}
                                     value={editSongParts[instId] ?? 0}
                                     onChange={e => {
-                                      const val = Math.max(0, Math.min(4, Number(e.target.value)));
+                                      const val = Number(e.target.value);
                                       setEditSongParts(prev => ({ ...prev, [instId]: val }));
                                     }}
-                                  />
+                                  >
+                                    {PART_COUNT_OPTIONS.map(opt => (
+                                      <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                    ))}
+                                  </select>
                                 </div>
                               );
                             })}
@@ -836,18 +846,19 @@ export default function MasterDataTab({ state, setState, onProceedToSchedule }: 
                               <span style={{ fontSize: '0.82rem', flex: '1', color: 'var(--primary)' }}>
                                 {inst.name} <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>(追加)</span>
                               </span>
-                              <input
-                                type="number"
-                                min="0"
-                                max="4"
+                              <select
                                 className="form-control"
-                                style={{ padding: '0.3rem', width: '55px', fontSize: '0.82rem' }}
+                                style={{ padding: '0.3rem 0.45rem', width: '75px', fontSize: '0.82rem' }}
                                 value={editSongParts[inst.id] ?? 1}
                                 onChange={e => {
-                                  const val = Math.max(0, Math.min(4, Number(e.target.value)));
+                                  const val = Number(e.target.value);
                                   setEditSongParts(prev => ({ ...prev, [inst.id]: val }));
                                 }}
-                              />
+                              >
+                                {PART_COUNT_OPTIONS.map(opt => (
+                                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                ))}
+                              </select>
                               <button
                                 type="button"
                                 className="btn btn-secondary btn-icon"
