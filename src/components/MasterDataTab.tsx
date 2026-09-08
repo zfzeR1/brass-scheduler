@@ -440,14 +440,14 @@ export default function MasterDataTab({ state, setState, onProceedToSchedule }: 
             </div>
           </div>
 
-          {/* 1-3 兼任NG */}
+          {/* 1-3 重複NG */}
           <div
             className={`dashboard-card ${subTab === 'ng-pairs' ? 'active' : ''}`}
             onClick={() => setSubTab('ng-pairs')}
           >
             <div className="dashboard-card-header">
               <span className="step-tag">1-3</span>
-              <span className="card-title">兼任・重複NG</span>
+              <span className="card-title">重複NG</span>
             </div>
             <div className="card-status">
               <span className="status-badge neutral">⚪ 任意 ({state.duplicateNGPairs.length}件)</span>
@@ -486,7 +486,7 @@ export default function MasterDataTab({ state, setState, onProceedToSchedule }: 
         </button>
         <button className={`nav-btn ${subTab === 'ng-pairs' ? 'active' : ''}`} onClick={() => setSubTab('ng-pairs')}>
           <ShieldAlert size={16} />
-          1-3 兼任NG (任意)
+          1-3 重複NG (任意)
         </button>
         <button className={`nav-btn ${subTab === 'entries' ? 'active' : ''}`} onClick={() => setSubTab('entries')}>
           <Award size={16} />
@@ -929,7 +929,7 @@ export default function MasterDataTab({ state, setState, onProceedToSchedule }: 
                   setSubTab('ng-pairs');
                 }}
               >
-                次へ: 1-3 兼任・重複NG設定へ <ChevronRight size={18} />
+                次へ: 1-3 重複NG設定へ <ChevronRight size={18} />
               </button>
             </div>
           </div>
@@ -938,9 +938,10 @@ export default function MasterDataTab({ state, setState, onProceedToSchedule }: 
 
       {/* SUB TAB: DUPLICATE NG (SHARED PARTS) */}
       {subTab === 'ng-pairs' && (
-        <div className="grid-2col">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+          {/* 重複NG設定フォーム */}
           <div className="glass-card">
-            <h2 style={{ fontSize: '1.2rem', marginBottom: '1.5rem' }}>重複NG（兼任パート）設定</h2>
+            <h2 style={{ fontSize: '1.2rem', marginBottom: '1.5rem' }}>重複NG設定</h2>
             <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '1.5rem' }}>
               異なる曲の間で、同じ人が兼任しているパートを登録します。登録されたパート同士は、絶対に同じ時間帯に並行して割り当てられません。
             </p>
@@ -1073,53 +1074,60 @@ export default function MasterDataTab({ state, setState, onProceedToSchedule }: 
                 </div>
               </div>
 
-              <button type="submit" className="btn btn-primary">
+              <button type="submit" className="btn btn-primary" style={{ alignSelf: 'flex-start' }}>
                 <Plus size={16} /> 重複NGペアを追加
               </button>
             </form>
           </div>
 
+          {/* 登録済みの重複NG一覧 */}
           <div className="glass-card">
-            <h2 style={{ fontSize: '1.2rem', marginBottom: '1.5rem' }}>登録済みの重複NGペア</h2>
-            <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
-              <table className="custom-table">
-                <thead>
-                  <tr>
-                    <th>パートA</th>
-                    <th>パートB</th>
-                    <th>操作</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {state.duplicateNGPairs.map(pair => {
-                    const songA = state.songs.find(s => s.id === pair.partA.songId);
-                    const songB = state.songs.find(s => s.id === pair.partB.songId);
+            <h2 style={{ fontSize: '1.2rem', marginBottom: '1.5rem' }}>登録済みの重複NG一覧 ({state.duplicateNGPairs.length}件)</h2>
+            {state.duplicateNGPairs.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '2rem 1rem', color: 'var(--text-muted)', fontSize: '0.85rem', border: '1px dashed var(--border-color)', borderRadius: 'var(--radius-md)' }}>
+                現在、手動登録された重複NGはありません。（異なる曲で同一楽器・同一パートの場合は自動で重複回避されます）
+              </div>
+            ) : (
+              <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
+                <table className="custom-table">
+                  <thead>
+                    <tr>
+                      <th>パートA</th>
+                      <th>パートB</th>
+                      <th>操作</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {state.duplicateNGPairs.map(pair => {
+                      const songA = state.songs.find(s => s.id === pair.partA.songId);
+                      const songB = state.songs.find(s => s.id === pair.partB.songId);
 
-                    return (
-                      <tr key={pair.id}>
-                        <td style={{ fontSize: '0.85rem' }}>
-                          <div style={{ fontWeight: 600 }}>{songA?.name || '不明'}</div>
-                          <div style={{ color: 'var(--text-secondary)' }}>{formatPartName(pair.partA.instrumentId, pair.partA.partIndex, pair.partA.songId, state.songs, state.instruments)}</div>
-                        </td>
-                        <td style={{ fontSize: '0.85rem' }}>
-                          <div style={{ fontWeight: 600 }}>{songB?.name || '不明'}</div>
-                          <div style={{ color: 'var(--text-secondary)' }}>{formatPartName(pair.partB.instrumentId, pair.partB.partIndex, pair.partB.songId, state.songs, state.instruments)}</div>
-                        </td>
-                        <td>
-                          <button className="btn btn-secondary btn-icon" onClick={() => handleRemoveNGPair(pair.id)}>
-                            <Trash2 size={14} style={{ color: 'var(--danger)' }} />
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+                      return (
+                        <tr key={pair.id}>
+                          <td style={{ fontSize: '0.85rem' }}>
+                            <div style={{ fontWeight: 600 }}>{songA?.name || '不明'}</div>
+                            <div style={{ color: 'var(--text-secondary)' }}>{formatPartName(pair.partA.instrumentId, pair.partA.partIndex, pair.partA.songId, state.songs, state.instruments)}</div>
+                          </td>
+                          <td style={{ fontSize: '0.85rem' }}>
+                            <div style={{ fontWeight: 600 }}>{songB?.name || '不明'}</div>
+                            <div style={{ color: 'var(--text-secondary)' }}>{formatPartName(pair.partB.instrumentId, pair.partB.partIndex, pair.partB.songId, state.songs, state.instruments)}</div>
+                          </td>
+                          <td>
+                            <button className="btn btn-secondary btn-icon" onClick={() => handleRemoveNGPair(pair.id)} title="削除">
+                              <Trash2 size={14} style={{ color: 'var(--danger)' }} />
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
 
           {/* 次のステップへ */}
-          <div className="next-step-bar" style={{ gridColumn: 'span 2', marginTop: '1.5rem' }}>
+          <div className="next-step-bar" style={{ marginTop: '0.5rem' }}>
             <button
               type="button"
               className="btn btn-primary btn-next-step"
