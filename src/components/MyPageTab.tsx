@@ -354,7 +354,7 @@ export default function MyPageTab({ state }: MyPageTabProps) {
                       </div>
                       <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '0.3rem', flexWrap: 'wrap' }}>
                         <MapPin size={15} style={{ color: 'var(--primary)', flexShrink: 0 }} />
-                        <span>練習場所: <strong style={{ color: 'var(--text-primary)' }}>{item.room?.name}</strong> (定員: {item.room?.capacity}人)</span>
+                        <span>練習場所: <strong style={{ color: 'var(--text-primary)' }}>{item.room?.name}</strong></span>
                       </div>
                       {item.activePart && (
                         <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
@@ -370,7 +370,7 @@ export default function MyPageTab({ state }: MyPageTabProps) {
                       </div>
                       <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '0.3rem', flexWrap: 'wrap' }}>
                         <MapPin size={15} style={{ color: 'var(--info)', flexShrink: 0 }} />
-                        <span>練習場所: <strong style={{ color: 'var(--text-primary)' }}>{item.room?.name}</strong> (兼用中)</span>
+                        <span>練習場所: <strong style={{ color: 'var(--text-primary)' }}>{item.room?.name}</strong></span>
                       </div>
                       {item.activePart && (
                         <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
@@ -396,7 +396,7 @@ export default function MyPageTab({ state }: MyPageTabProps) {
                     <div className="badge badge-danger" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.55rem 0.85rem', borderRadius: 'var(--radius-md)' }}>
                       <AlertCircle size={18} style={{ flexShrink: 0 }} />
                       <div style={{ textAlign: 'left', fontSize: '0.78rem', lineHeight: 1.4 }}>
-                        <div style={{ fontWeight: 700 }}>🔴 要 {state.timeSettings.intervalDuration}分前退室</div>
+                        <div style={{ fontWeight: 700 }}>🔴 移動あり</div>
                         <div>➔ 次の部屋「<strong>{state.rooms.find(r => r.id === nextRoomId)?.name}</strong>」へ移動</div>
                       </div>
                     </div>
