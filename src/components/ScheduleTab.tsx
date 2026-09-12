@@ -7,6 +7,7 @@ import {
   evaluateSchedule,
   formatPartName
 } from '../utils/scheduler';
+import { useScheduleUndo, type ScheduleUndoManager } from '../hooks/useScheduleUndo';
 import {
   Play,
   RotateCcw,
@@ -19,19 +20,37 @@ import {
   ArrowLeftRight,
   Edit3,
   X,
-  Plus
+  Plus,
+  Camera
 } from 'lucide-react';
+import TimetableExportModal from './TimetableExportModal';
 
 interface ScheduleTabProps {
   state: ScheduleState;
   setState: React.Dispatch<React.SetStateAction<ScheduleState>>;
+  undoControls?: ScheduleUndoManager;
 }
 
-export default function ScheduleTab({ state, setState }: ScheduleTabProps) {
+export default function ScheduleTab({ state, setState, undoControls }: ScheduleTabProps) {
+  const localUndo = useScheduleUndo(state.assignments, (newAssignments) => {
+    setState(prev => ({
+      ...prev,
+      assignments: newAssignments
+    }));
+  });
+
+  const {
+    setAssignmentsWithHistory,
+    undo,
+    canUndo,
+    historyLength
+  } = undoControls ?? localUndo;
+
   const [dragOverCell, setDragOverCell] = useState<string | null>(null);
   const [mobileSlot, setMobileSlot] = useState(0);
   const [swapSource, setSwapSource] = useState<{ slotIndex: number; roomId: string } | null>(null);
   const [editTarget, setEditTarget] = useState<{ slotIndex: number; roomId: string } | null>(null);
+  const [showExportModal, setShowExportModal] = useState(false);
 
   // Mobile detection
   const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth <= 768);
@@ -67,22 +86,19 @@ export default function ScheduleTab({ state, setState }: ScheduleTabProps) {
   // 自動スケジュール生成を実行する
   const handleAutoGenerate = (startSlot: number = 0) => {
     const updatedAssignments = generateSchedule(state, startSlot);
-    setState(prev => ({
-      ...prev,
-      assignments: updatedAssignments
-    }));
+    setAssignmentsWithHistory(updatedAssignments);
   };
 
   // ロックの切り替え
   const toggleLock = (slotIndex: number, roomId: string) => {
-    setState(prev => {
-      const updated = prev.assignments.map(asm => {
+    setAssignmentsWithHistory(prev => {
+      const updated = prev.map(asm => {
         if (asm.slotIndex === slotIndex && asm.roomId === roomId) {
           return { ...asm, isLocked: !asm.isLocked };
         }
         return asm;
       });
-      return { ...prev, assignments: updated };
+      return updated;
     });
   };
 
@@ -90,8 +106,8 @@ export default function ScheduleTab({ state, setState }: ScheduleTabProps) {
   const handleSwapAssignments = (srcSlotIndex: number, srcRoomId: string, destSlotIndex: number, destRoomId: string) => {
     if (srcSlotIndex === destSlotIndex && srcRoomId === destRoomId) return;
 
-    setState(prev => {
-      const updated = [...prev.assignments];
+    setAssignmentsWithHistory(prev => {
+      const updated = [...prev];
       let srcIdx = updated.findIndex(
         asm => asm.slotIndex === srcSlotIndex && asm.roomId === srcRoomId
       );
@@ -142,7 +158,7 @@ export default function ScheduleTab({ state, setState }: ScheduleTabProps) {
         isPersonalPractice: srcAsm.isPersonalPractice
       };
 
-      return { ...prev, assignments: updated };
+      return updated;
     });
   };
 
@@ -150,8 +166,8 @@ export default function ScheduleTab({ state, setState }: ScheduleTabProps) {
   const handleAssignEntry = (slotIndex: number, roomId: string, entryId: string) => {
     const entry = state.entries.find(e => e.id === entryId);
     if (!entry) return;
-    setState(prev => {
-      const updated = [...prev.assignments];
+    setAssignmentsWithHistory(prev => {
+      const updated = [...prev];
       const idx = updated.findIndex(a => a.slotIndex === slotIndex && a.roomId === roomId);
       const newAsm: Assignment = {
         id: `${slotIndex}_${roomId}`,
@@ -171,14 +187,14 @@ export default function ScheduleTab({ state, setState }: ScheduleTabProps) {
       } else {
         updated.push(newAsm);
       }
-      return { ...prev, assignments: updated };
+      return updated;
     });
   };
 
   // 枠を個人練習部屋に設定する
   const handleSetPersonalPractice = (slotIndex: number, roomId: string) => {
-    setState(prev => {
-      const updated = [...prev.assignments];
+    setAssignmentsWithHistory(prev => {
+      const updated = [...prev];
       const idx = updated.findIndex(a => a.slotIndex === slotIndex && a.roomId === roomId);
       const newAsm: Assignment = {
         id: `${slotIndex}_${roomId}`,
@@ -194,14 +210,14 @@ export default function ScheduleTab({ state, setState }: ScheduleTabProps) {
       } else {
         updated.push(newAsm);
       }
-      return { ...prev, assignments: updated };
+      return updated;
     });
   };
 
   // 枠を空き部屋にする
   const handleSetEmpty = (slotIndex: number, roomId: string) => {
-    setState(prev => {
-      const updated = [...prev.assignments];
+    setAssignmentsWithHistory(prev => {
+      const updated = [...prev];
       const idx = updated.findIndex(a => a.slotIndex === slotIndex && a.roomId === roomId);
       const newAsm: Assignment = {
         id: `${slotIndex}_${roomId}`,
@@ -217,7 +233,7 @@ export default function ScheduleTab({ state, setState }: ScheduleTabProps) {
       } else {
         updated.push(newAsm);
       }
-      return { ...prev, assignments: updated };
+      return updated;
     });
   };
 
@@ -407,9 +423,60 @@ export default function ScheduleTab({ state, setState }: ScheduleTabProps) {
 
       {/* Control Actions */}
       <div className="glass-card" style={{ marginBottom: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem' }}>
-        <button className="btn btn-primary" onClick={() => handleAutoGenerate(0)} style={{ fontSize: '0.85rem', padding: '0.6rem 1.25rem' }}>
-          <Play size={16} /> スケジュールを自動生成
-        </button>
+        <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
+          <button className="btn btn-primary" onClick={() => handleAutoGenerate(0)} style={{ fontSize: '0.85rem', padding: '0.6rem 1.25rem' }}>
+            <Play size={16} /> スケジュールを自動生成
+          </button>
+
+          <button
+            className="btn btn-secondary"
+            onClick={undo}
+            disabled={!canUndo}
+            title={canUndo ? `直前の状態に戻す (残り${historyLength}手)` : '元に戻す履歴がありません'}
+            style={{
+              fontSize: '0.85rem',
+              padding: '0.6rem 1.1rem',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.4rem',
+              opacity: canUndo ? 1 : 0.45,
+              cursor: canUndo ? 'pointer' : 'not-allowed'
+            }}
+          >
+            <RotateCcw size={15} />
+            <span>↩︎ 元に戻す (Undo)</span>
+            {historyLength > 0 && (
+              <span
+                className="badge badge-primary"
+                style={{
+                  fontSize: '0.72rem',
+                  padding: '1px 6px',
+                  borderRadius: '9999px',
+                  marginLeft: '2px',
+                  fontWeight: 600
+                }}
+              >
+                {historyLength}
+              </span>
+            )}
+          </button>
+
+          <button
+            className="btn btn-secondary"
+            onClick={() => setShowExportModal(true)}
+            title="タイムテーブル全体をPNG画像として保存"
+            style={{
+              fontSize: '0.85rem',
+              padding: '0.6rem 1.1rem',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.4rem'
+            }}
+          >
+            <Camera size={15} />
+            <span>📸 画像保存 (PNG)</span>
+          </button>
+        </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
           <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
@@ -854,6 +921,13 @@ export default function ScheduleTab({ state, setState }: ScheduleTabProps) {
           onToggleLock={() => toggleLock(editTarget.slotIndex, editTarget.roomId)}
         />
       )}
+
+      {/* タイムテーブルPNG画像エクスポートモーダル (R2) */}
+      <TimetableExportModal
+        isOpen={showExportModal}
+        onClose={() => setShowExportModal(false)}
+        state={state}
+      />
     </div>
   );
 }

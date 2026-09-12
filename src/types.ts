@@ -33,6 +33,12 @@ export interface PartReference {
   partIndex: number; // 0-indexed (e.g. 0 = 1st, 1 = 2nd)
 }
 
+export interface SelectedPart {
+  songId: string;
+  instrumentId: string;
+  partIndex: number;
+}
+
 export interface DuplicateNGPair {
   id: string;
   partA: PartReference;

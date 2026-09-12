@@ -1,21 +1,41 @@
-import { useState, useMemo } from 'react';
-import type { ScheduleState, Assignment, Song, Instrument } from '../types';
+import { useState, useMemo, useEffect } from 'react';
+import type { ScheduleState, Assignment, Song, Instrument, SelectedPart } from '../types';
 import { calculateNumSlots, getSlotTimeRange, formatPartName } from '../utils/scheduler';
+import { loadSavedSelectedParts, saveSelectedParts, sanitizeSelectedParts } from '../utils/partStorage';
 import { User, MapPin, AlertCircle, CheckCircle, Clock, Info, ChevronDown, ChevronUp } from 'lucide-react';
 
 interface MyPageTabProps {
   state: ScheduleState;
 }
 
-interface SelectedPart {
-  songId: string;
-  instrumentId: string;
-  partIndex: number;
-}
-
 export default function MyPageTab({ state }: MyPageTabProps) {
-  const [selectedParts, setSelectedParts] = useState<SelectedPart[]>([]);
-  const [isPanelOpen, setIsPanelOpen] = useState(true);
+  const [selectedParts, setSelectedParts] = useState<SelectedPart[]>(() => {
+    return loadSavedSelectedParts(state.songs);
+  });
+  const [isPanelOpen, setIsPanelOpen] = useState<boolean>(() => {
+    return loadSavedSelectedParts(state.songs).length === 0;
+  });
+
+  // state.songs が変更された場合（管理者が曲を削除・パート数を変更した場合など）のサニタイズ
+  useEffect(() => {
+    setSelectedParts(prev => {
+      const sanitized = sanitizeSelectedParts(prev, state.songs);
+      const isChanged =
+        sanitized.length !== prev.length ||
+        sanitized.some(
+          (p, idx) =>
+            p.songId !== prev[idx].songId ||
+            p.instrumentId !== prev[idx].instrumentId ||
+            p.partIndex !== prev[idx].partIndex
+        );
+
+      if (isChanged) {
+        saveSelectedParts(sanitized);
+        return sanitized;
+      }
+      return prev;
+    });
+  }, [state.songs]);
 
   const numSlots = useMemo(() => {
     return calculateNumSlots(
@@ -28,23 +48,31 @@ export default function MyPageTab({ state }: MyPageTabProps) {
 
   // 担当パートを追加・削除する
   const togglePartSelection = (songId: string, instrumentId: string, partIndex: number) => {
-    const isSelected = selectedParts.some(
-      p => p.songId === songId && p.instrumentId === instrumentId && p.partIndex === partIndex
-    );
-
-    if (isSelected) {
-      setSelectedParts(prev =>
-        prev.filter(p => !(p.songId === songId && p.instrumentId === instrumentId && p.partIndex === partIndex))
+    setSelectedParts(prev => {
+      const isSelected = prev.some(
+        p => p.songId === songId && p.instrumentId === instrumentId && p.partIndex === partIndex
       );
-    } else {
-      setSelectedParts(prev => [...prev, { songId, instrumentId, partIndex }]);
-    }
+
+      const next = isSelected
+        ? prev.filter(p => !(p.songId === songId && p.instrumentId === instrumentId && p.partIndex === partIndex))
+        : [...prev, { songId, instrumentId, partIndex }];
+
+      saveSelectedParts(next);
+      return next;
+    });
+  };
+
+  // 選択をすべて解除する
+  const clearAllSelections = () => {
+    setSelectedParts([]);
+    saveSelectedParts([]);
   };
 
   // 選択可能な全曲の全パートリストを作成
   const availableParts = useMemo(() => {
     const list: Array<{ song: Song; inst: Instrument; partIndex: number; key: string }> = [];
     for (const song of state.songs) {
+      if (!song || !song.parts || typeof song.parts !== 'object') continue;
       for (const instId of Object.keys(song.parts)) {
         const inst = state.instruments.find(i => i.id === instId);
         const count = song.parts[instId];
@@ -101,8 +129,10 @@ export default function MyPageTab({ state }: MyPageTabProps) {
         // 全パートリスト
         const allPartsList: Array<{ songId: string; instrumentId: string; partIndex: number }> = [];
         for (const song of state.songs) {
+          if (!song || !song.parts || typeof song.parts !== 'object') continue;
           for (const instId of Object.keys(song.parts)) {
             const partCount = song.parts[instId];
+            if (typeof partCount !== 'number' || partCount <= 0) continue;
             for (let idx = 0; idx < partCount; idx++) {
               allPartsList.push({ songId: song.id, instrumentId: instId, partIndex: idx });
             }
@@ -205,9 +235,23 @@ export default function MyPageTab({ state }: MyPageTabProps) {
               担当パート
             </h2>
             {selectedParts.length > 0 ? (
-              <span className="badge badge-primary" style={{ fontSize: '0.72rem' }}>
-                {selectedParts.length}パート選択中
-              </span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                <span className="badge badge-primary" style={{ fontSize: '0.72rem' }}>
+                  {selectedParts.length}パート選択中
+                </span>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  style={{ padding: '0.15rem 0.5rem', fontSize: '0.7rem', color: 'var(--text-muted)' }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    clearAllSelections();
+                  }}
+                  title="すべての選択を解除します"
+                >
+                  解除
+                </button>
+              </div>
             ) : (
               <span className="badge badge-secondary" style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
                 未選択
