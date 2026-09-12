@@ -1,73 +1,125 @@
-# React + TypeScript + Vite
+# 🎺 Brass Scheduler（吹奏楽部 練習スケジュール自動生成＆共有アプリ）
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+[![React](https://img.shields.io/badge/React-19.x-61DAFB?logo=react&logoColor=black)](https://react.dev/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-6.x-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Vite](https://img.shields.io/badge/Vite-8.x-646CFF?logo=vite&logoColor=white)](https://vitejs.dev/)
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-Currently, two official plugins are available:
+吹奏楽・管弦楽・アンサンブルのパート練習・分奏スケジュール作成を自動化するWebアプリケーションです。  
+部員の兼任重複、部屋の定員、大型楽器の移動不可制約をクリアした最適なタイムテーブルを瞬時に生成し、部員全員へスムーズに共有できます。
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+🔗 **公開Webアプリ**: [https://brass-scheduler.vercel.app](https://brass-scheduler.vercel.app)  
+📦 **GitHubリポジトリ**: [https://github.com/zfzeR1/brass-scheduler](https://github.com/zfzeR1/brass-scheduler)
 
-## React Compiler
+---
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## 💡 このアプリで解決できること
 
-## Expanding the ESLint configuration
+吹奏楽部の練習日程を組む際、以下のような悩みが頻発します：
+- 「AさんとBさんが別々の曲で同じパートを持っていて、同じ時間帯に練習が被ってしまう」
+- 「ティンパニや打楽器、チューバなど重い楽器の部屋移動が大変」
+- 「部屋の定員オーバーや、空き部屋が上手く活用できていない」
+- 「手作業でタイムテーブルを組むのに何時間もかかり、部員への周知も面倒」
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+**Brass Scheduler** は、これらの制約条件をもとに数理的アプローチで最適なスケジュールを自動生成し、手動での微調整から部員への配信（LINE・QRコード）までをワンストップで完結させます。
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+---
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+## 🌟 主な機能・特徴
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+### 1. ⚡ 制約考慮の自動スケジュール最適化
+- **ハード制約（違反を許さないルール）**:
+  - 部屋の定員（キャパシティ）を超えた練習の配置禁止
+  - 持ち替え・兼任パートの同一時間帯での重複禁止（重複NGペア設定）
+  - 移動不可楽器（ティンパニ等）の常設部屋からの移動禁止
+- **ソフト制約（優先度と快適さの最大化）**:
+  - 優先度（高・中・低）に応じた練習枠の優先的アサイン
+  - コマ間でのパート移動回数の最小化（移動負担の軽減）
+  - 練習がないパートの個人練習部屋への自動退避シミュレーション
+
+### 2. 📱 PC・スマホ両対応の直感的な手動調整
+- **PC**: カード左上のドラッグハンドル（`⠿`）を掴んで、部屋やコマの間で自由にドラッグ＆ドロップ入れ替え。
+- **スマートフォン**:
+  - カード型の縦並びタイムライン表示でスマホ画面でも見やすく整理。
+  - **「⇄ 入替」**: タップして入れ替え先を選ぶだけの2段階タップスワップ。コマを跨いだ入替も可能。
+  - **「✏️ 変更」**: モーダルからセクション練習の直接指定、空き部屋・個人練習部屋へのワンタップ切替、同コマ内の部屋入替に対応。
+- **部分再計算＆ロック**: 決定した枠は「🔒 固定」し、以降のコマだけを「ここから再計算」することが可能。
+
+### 3. 🚀 超高圧縮・サーバーレス共有（LINE / QRコード）
+- **Deflate圧縮 & URLセーフBase64**: スケジュールデータを高圧縮化し、URL文字数を約9,000文字から**約700文字（約92%削減）**に軽量化。
+- **URLハッシュ方式（`#`）**: データをハッシュ部に格納するため、Webサーバーの文字数制限（HTTP 414エラー）が物理的に発生せず、確実に開けます。
+- **LINE用メッセージワンタップコピー**: 案内文付きの共有テキストを一発コピーしてLINEグループへ貼り付け可能。
+- **QRコード表示**: 合奏室のiPadやプロジェクター、黒板に掲示して、部員がスマホカメラから即座に時間割を開けます。
+
+### 4. 👤 部員専用マイページ（個人時間割）
+- 共有リンクを開いた部員は、自分の担当パート（例: `アルヴァマー序曲: 1st Flute`）を選択するだけで、**「自分がどのコマにどの部屋へ行けばよいか」**をハイライト表示。
+
+### 5. 🔒 完全クライアント完結型（安心のプライバシー・無料）
+- すべての計算・保存・共有処理がブラウザ内で完結します。外部サーバーに部員情報や練習内容が保存されないため、セキュリティ・プライバシー面も安心です。
+
+---
+
+## 🚀 使い方（かんたん3ステップ）
+
+### STEP 1: 基本条件設定
+1. **1-1 基本設定（時間・部屋）**: 練習の開始・終了時刻、コマ時間（分）、インターバル、各練習室の定員や常設楽器を設定。
+2. **1-2 演奏曲・パート編成**: 演奏曲名と使用するパート数（1st〜4thなどをプルダウン選択）を登録。
+3. **1-3 重複NG設定**: 複数曲にまたがって同一人物が演奏するパートの組み合わせ（兼任ペア）を登録。
+4. **1-4 セクション練習登録**: 練習したい曲・箇所（小節や練習番号）・参加パート・優先度（高/中/低）をエントリー。
+
+### STEP 2: スケジュール自動生成・調整
+1. 「**スケジュールを自動生成**」をクリックして最適スケジュールを一括作成。
+2. 制約チェック結果（スコアと警告一覧）を確認。
+3. ドラッグ＆ドロップまたは「⇄ 入替」「✏️ 変更」ボタンで手動微調整。
+4. 確定した枠は「🔒」で固定し、必要に応じて「ここから再計算」を実行。
+
+### STEP 3: 共有・確認
+1. 「**LINE用メッセージをコピー**」をクリックして部内LINEグループに送信。
+2. または「**QRコードを表示**」を開き、部員にスマホカメラで読み取ってもらう。
+3. 部員は自分のパートを選ぶだけで本日の時間割を確認完了！
+
+---
+
+## 🛠 技術スタック
+
+| カテゴリ | 使用技術 |
+| :--- | :--- |
+| **フロントエンド** | React 19, TypeScript |
+| **ビルドツール** | Vite 8 |
+| **アイコン** | Lucide React |
+| **データ圧縮** | pako (Deflate / Inflate) |
+| **QRコード** | qrcode.react (SVGレンダリング) |
+| **スタイリング** | CSS Variables, Glassmorphism, レスポンシブ設計（OSダーク/ライトテーマ自動追従） |
+| **ホスティング** | Vercel |
+
+---
+
+## 💻 ローカル開発・セットアップ
+
+### 必要要件
+- Node.js 20以上
+- npm または yarn / pnpm
+
+### 手順
+
+```bash
+# 1. リポジトリのクローン
+git clone https://github.com/zfzeR1/brass-scheduler.git
+cd brass-scheduler
+
+# 2. 依存パッケージのインストール
+npm install
+
+# 3. 開発サーバーの起動
+npm run dev
+# -> http://localhost:5173 にアクセス
+
+# 4. プロダクションビルド
+npm run build
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+---
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+## 📄 ライセンス
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+このプロジェクトは [MIT License](LICENSE) のもとで公開されています。
