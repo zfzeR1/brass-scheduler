@@ -15,7 +15,7 @@ import {
 import MasterDataTab from './components/MasterDataTab';
 import ScheduleTab from './components/ScheduleTab';
 import MyPageTab from './components/MyPageTab';
-import { Music, Settings, Calendar, Share2, Info, ChevronRight, Copy, ExternalLink, Smartphone, MessageCircle, X } from 'lucide-react';
+import { Music, Settings, Calendar, Share2, Info, ChevronRight, Copy, ExternalLink, Smartphone, MessageCircle, X, Loader2 } from 'lucide-react';
 import { deflate, inflate } from 'pako';
 import { QRCodeSVG } from 'qrcode.react';
 
@@ -311,11 +311,17 @@ export default function App() {
   // --- 部員閲覧モード ---
   const [isMemberMode, setIsMemberMode] = useState(false);
   const [memberData, setMemberData] = useState<ScheduleState | null>(null);
+  const [isLoadingSchedule, setIsLoadingSchedule] = useState(false);
+  const [scheduleLoadError, setScheduleLoadError] = useState<string | null>(null);
 
   // --- 管理者モード ---
   const [activeTab, setActiveTab] = useState<TabKey>('master');
   const [shareCopied, setShareCopied] = useState<'url' | 'line' | false>(false);
   const [showQR, setShowQR] = useState(false);
+  const [qrUrl, setQrUrl] = useState<string>('');
+  const [cachedShortUrl, setCachedShortUrl] = useState<string | null>(null);
+  const [isGeneratingShortUrl, setIsGeneratingShortUrl] = useState(false);
+
   const [state, setState] = useState<ScheduleState>(() => {
     const saved = localStorage.getItem('antigravity_schedule_state_v3');
     if (saved) {
@@ -339,6 +345,12 @@ export default function App() {
     };
   });
 
+  // スケジュール変更時に短縮URLキャッシュをクリア
+  useEffect(() => {
+    setCachedShortUrl(null);
+    setQrUrl('');
+  }, [state]);
+
   // OSのテーマ設定（ダーク/ライト）に自動追従
   useEffect(() => {
     const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
@@ -355,26 +367,61 @@ export default function App() {
     return () => mediaQuery.removeEventListener('change', applyTheme);
   }, []);
 
-  // URL ハッシュ or クエリから部員閲覧モードを検出（新旧形式両対応）
+  // URL ハッシュ or クエリから部員閲覧モードを検出（短縮ID・新旧形式すべてに対応）
   useEffect(() => {
+    let shortId: string | null = null;
     let view: string | null = null;
     let data: string | null = null;
 
-    // 1. 新形式: ハッシュ (#view=member&d=...)
+    // 1. ハッシュ形式 (#s=xxx or #view=member&d=xxx or #6文字ID)
     const hash = window.location.hash.replace(/^#/, '');
     if (hash) {
       const hashParams = new URLSearchParams(hash);
+      shortId = hashParams.get('s');
       view = hashParams.get('view');
       data = hashParams.get('d');
+      if (!shortId && !view && !data && hash.length === 6 && !hash.includes('=')) {
+        shortId = hash;
+      }
     }
 
-    // 2. 旧形式フォールバック: クエリ (?view=member&d=...)
-    if (!view || !data) {
+    // 2. クエリ形式フォールバック (?s=xxx or ?view=member&d=xxx)
+    if (!shortId && !data) {
       const queryParams = new URLSearchParams(window.location.search);
+      shortId = queryParams.get('s');
       view = queryParams.get('view');
       data = queryParams.get('d');
     }
 
+    // A. 短縮IDの場合: /api/schedule からデータを非同期取得
+    if (shortId) {
+      setIsLoadingSchedule(true);
+      fetch(`/api/schedule?id=${encodeURIComponent(shortId)}`)
+        .then(res => {
+          if (!res.ok) throw new Error('スケジュールが見つかりません。期限切れ（30日経過）の可能性があります。');
+          return res.json();
+        })
+        .then(json => {
+          if (json.data) {
+            const decoded = decodeScheduleData(json.data);
+            if (decoded) {
+              setIsMemberMode(true);
+              setMemberData(decoded);
+              setIsLoadingSchedule(false);
+              return;
+            }
+          }
+          throw new Error('スケジュールデータの復元に失敗しました。');
+        })
+        .catch(err => {
+          console.error('Failed to load schedule', err);
+          setScheduleLoadError(err instanceof Error ? err.message : '読み込みに失敗しました。');
+          setIsLoadingSchedule(false);
+        });
+      return;
+    }
+
+    // B. フルデータ埋め込みURLの場合: その場で即時デコード
     if (view === 'member' && data) {
       const decoded = decodeScheduleData(data);
       if (decoded) {
@@ -413,9 +460,36 @@ export default function App() {
     setActiveTab(targetTab);
   };
 
+  // 短縮URLの取得・発行（失敗時はフルハッシュURLへ自動フォールバック）
+  const getOrGenerateShortUrl = async (): Promise<string> => {
+    if (cachedShortUrl) return cachedShortUrl;
+    setIsGeneratingShortUrl(true);
+    try {
+      const encoded = encodeScheduleData(state);
+      const res = await fetch('/api/schedule', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ data: encoded })
+      });
+      if (res.ok) {
+        const json = await res.json();
+        if (json.id) {
+          const shortUrl = `${window.location.origin}${window.location.pathname}#s=${json.id}`;
+          setCachedShortUrl(shortUrl);
+          setIsGeneratingShortUrl(false);
+          return shortUrl;
+        }
+      }
+    } catch (e) {
+      console.warn('短縮URLの発行に失敗したため、ハッシュURLへフォールバックします', e);
+    }
+    setIsGeneratingShortUrl(false);
+    return generateShareUrl(state);
+  };
+
   // 共有URLリンクをコピー
-  const handleCopyShareUrl = () => {
-    const url = generateShareUrl(state);
+  const handleCopyShareUrl = async () => {
+    const url = await getOrGenerateShortUrl();
     navigator.clipboard.writeText(url).then(() => {
       setShareCopied('url');
       setTimeout(() => setShareCopied(false), 3000);
@@ -425,8 +499,8 @@ export default function App() {
   };
 
   // LINE用共有メッセージをコピー
-  const handleCopyLineMessage = () => {
-    const url = generateShareUrl(state);
+  const handleCopyLineMessage = async () => {
+    const url = await getOrGenerateShortUrl();
     const message = `【練習スケジュールのご案内】\n本日の練習スケジュールが決定しました！\n以下のリンクを開き、ご自身の担当パートを選択して時間割・練習場所をご確認ください👇\n\n${url}`;
     navigator.clipboard.writeText(message).then(() => {
       setShareCopied('line');
@@ -435,6 +509,43 @@ export default function App() {
       window.prompt('以下のメッセージをコピーしてください:', message);
     });
   };
+
+  // QRコード表示を開く
+  const handleOpenQR = async () => {
+    setShowQR(true);
+    const url = await getOrGenerateShortUrl();
+    setQrUrl(url);
+  };
+
+  // ============================
+  // ローディング画面 (短縮URL取得中)
+  // ============================
+  if (isLoadingSchedule) {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '1rem', color: 'var(--text-secondary)' }}>
+        <Loader2 size={36} className="spin" style={{ color: 'var(--primary)' }} />
+        <div style={{ fontSize: '0.95rem' }}>練習スケジュールを読み込み中...</div>
+      </div>
+    );
+  }
+
+  // ============================
+  // エラー画面 (短縮URLが見つからない場合)
+  // ============================
+  if (scheduleLoadError) {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '1.25rem', padding: '1.5rem', textAlign: 'center' }}>
+        <div style={{ fontSize: '2.5rem' }}>⚠️</div>
+        <h2 style={{ fontSize: '1.2rem', color: 'var(--text-primary)', margin: 0 }}>スケジュールを開けませんでした</h2>
+        <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', maxWidth: '420px', lineHeight: 1.6, margin: 0 }}>
+          {scheduleLoadError}
+        </p>
+        <a href={window.location.origin + window.location.pathname} className="btn btn-primary" style={{ fontSize: '0.85rem', marginTop: '0.5rem' }}>
+          トップ画面へ
+        </a>
+      </div>
+    );
+  }
 
   // ============================
   // 部員閲覧モード (共有リンクから開いた場合)
@@ -588,10 +699,15 @@ export default function App() {
                     <button
                       className="btn btn-primary"
                       onClick={handleCopyLineMessage}
+                      disabled={isGeneratingShortUrl}
                       style={{ fontSize: '0.92rem', padding: '0.75rem 1.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}
                     >
-                      <MessageCircle size={16} />
-                      {shareCopied === 'line' ? '✅ LINE用メッセージをコピーしました！' : 'LINE用メッセージをコピー（案内文付き）'}
+                      {isGeneratingShortUrl ? (
+                        <Loader2 size={16} className="spin" />
+                      ) : (
+                        <MessageCircle size={16} />
+                      )}
+                      {shareCopied === 'line' ? '✅ LINE用メッセージをコピーしました！' : isGeneratingShortUrl ? '短縮リンク発行中...' : 'LINE用メッセージをコピー（案内文付き）'}
                     </button>
 
                     <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
@@ -599,16 +715,17 @@ export default function App() {
                       <button
                         className="btn btn-secondary"
                         onClick={handleCopyShareUrl}
+                        disabled={isGeneratingShortUrl}
                         style={{ flex: 1, fontSize: '0.82rem', padding: '0.6rem 1rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem', minWidth: '140px' }}
                       >
-                        <Copy size={14} />
+                        {isGeneratingShortUrl ? <Loader2 size={14} className="spin" /> : <Copy size={14} />}
                         {shareCopied === 'url' ? '✅ コピー完了' : 'URLのみコピー'}
                       </button>
 
                       {/* QRコード表示 */}
                       <button
                         className="btn btn-secondary"
-                        onClick={() => setShowQR(true)}
+                        onClick={handleOpenQR}
                         style={{ flex: 1, fontSize: '0.82rem', padding: '0.6rem 1rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem', minWidth: '140px' }}
                       >
                         <Smartphone size={14} />
@@ -660,15 +777,19 @@ export default function App() {
                           borderRadius: 'var(--radius-md)',
                           padding: '1.5rem',
                           display: 'inline-block',
-                          marginBottom: '1rem'
+                          marginBottom: '0.75rem'
                         }}
                       >
                         <QRCodeSVG
-                          value={generateShareUrl(state)}
+                          value={qrUrl || cachedShortUrl || generateShareUrl(state)}
                           size={256}
                           level="M"
                           includeMargin={false}
                         />
+                      </div>
+
+                      <div style={{ wordBreak: 'break-all', fontSize: '0.72rem', color: 'var(--primary)', marginBottom: '0.75rem', fontFamily: 'monospace' }}>
+                        {qrUrl || cachedShortUrl || generateShareUrl(state)}
                       </div>
 
                       <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
