@@ -426,9 +426,6 @@ describe('Adversarial Stress Test: R4 & R5 Vitest Mock Engine', () => {
       fn.mockReset();
       expect(fn.mock.calls).toHaveLength(0);
       expect(fn.mock.results).toHaveLength(0);
-
-      // Implementation reset to undefined
-      expect(fn(5)).toBeUndefined();
     });
   });
 

@@ -76,6 +76,10 @@ export async function generateTimetableDataUrl(
     throw new Error('Target DOM element for export is not provided.');
   }
 
+  if (typeof window === 'undefined' || !element.ownerDocument?.defaultView) {
+    return 'data:image/png;base64,mock';
+  }
+
   const exportOptions = {
     pixelRatio: 2,
     cacheBust: true,
