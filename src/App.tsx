@@ -208,6 +208,11 @@ export default function App() {
     return () => mediaQuery.removeEventListener('change', applyTheme);
   }, []);
 
+  // ページタイトルをモードに応じて設定
+  useEffect(() => {
+    document.title = isMemberMode ? '練習スケジュール - Brass Scheduler' : 'Brass Scheduler - 吹奏楽練習スケジュール作成';
+  }, [isMemberMode]);
+
   // URL ハッシュ or クエリから部員閲覧モードを検出（短縮ID・新旧形式すべてに対応）
   useEffect(() => {
     let shortId: string | null = null;
@@ -342,7 +347,7 @@ export default function App() {
   // LINE用共有メッセージをコピー
   const handleCopyLineMessage = async () => {
     const url = await getOrGenerateShortUrl();
-    const message = `【練習スケジュールのご案内】\n本日の練習スケジュールが決定しました！\n以下のリンクを開き、ご自身の担当パートを選択して時間割・練習場所をご確認ください👇\n\n${url}`;
+    const message = `【Brass Scheduler 練習スケジュールのご案内】\n本日の練習スケジュールが決定しました！\n以下のリンクを開き、ご自身の担当パートを選択して時間割・練習場所をご確認ください👇\n\n${url}`;
     navigator.clipboard.writeText(message).then(() => {
       setShareCopied('line');
       setTimeout(() => setShareCopied(false), 3000);
@@ -397,9 +402,10 @@ export default function App() {
         {/* ヘッダー */}
         <div className="member-header">
           <div className="member-header-inner">
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
               <Music size={22} style={{ color: 'var(--primary)' }} />
               <h1 className="member-title">練習スケジュール</h1>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', background: 'var(--bg-tertiary)', padding: '0.2rem 0.5rem', borderRadius: '4px', fontWeight: 600 }}>Brass Scheduler</span>
             </div>
             <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginTop: '0.35rem' }}>
               練習時間: {memberData.timeSettings.startTime} 〜 {memberData.timeSettings.endTime} ｜ 1コマ: {memberData.timeSettings.slotDuration}分 ｜ インターバル: {memberData.timeSettings.intervalDuration}分
@@ -432,7 +438,7 @@ export default function App() {
       <aside className="sidebar">
         <div className="app-logo">
           <Music size={24} />
-          <span>Section Optimizer</span>
+          <span>Brass Scheduler</span>
         </div>
 
         <nav className="nav-links">
