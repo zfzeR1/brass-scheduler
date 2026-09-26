@@ -1,7 +1,8 @@
 import { useState, useMemo, useEffect } from 'react';
-import type { ScheduleState, Assignment, Song, Instrument, SelectedPart } from '../types';
+import type { ScheduleState, SelectedPart } from '../types';
 import { calculateNumSlots, getSlotTimeRange, formatPartName } from '../utils/scheduler';
 import { loadSavedSelectedParts, saveSelectedParts, sanitizeSelectedParts } from '../utils/partStorage';
+import { getAvailableParts, calculateUserSchedule } from '../utils/personalPractice';
 import { User, MapPin, AlertCircle, CheckCircle, Clock, Info, ChevronDown, ChevronUp } from 'lucide-react';
 
 interface MyPageTabProps {
@@ -70,153 +71,13 @@ export default function MyPageTab({ state }: MyPageTabProps) {
 
   // 選択可能な全曲の全パートリストを作成
   const availableParts = useMemo(() => {
-    const list: Array<{ song: Song; inst: Instrument; partIndex: number; key: string }> = [];
-    for (const song of state.songs) {
-      if (!song || !song.parts || typeof song.parts !== 'object') continue;
-      for (const instId of Object.keys(song.parts)) {
-        const inst = state.instruments.find(i => i.id === instId);
-        const count = song.parts[instId];
-        if (inst) {
-          for (let idx = 0; idx < count; idx++) {
-            list.push({
-              song,
-              inst,
-              partIndex: idx,
-              key: `${song.id}_${instId}_${idx}`
-            });
-          }
-        }
-      }
-    }
-    return list;
+    return getAvailableParts(state.songs, state.instruments);
   }, [state.songs, state.instruments]);
 
   // 各コマにおける特定のユーザー（選択した担当パートのセット）の現在位置（アサイン状態と部屋）をシミュレートする
   const userSchedule = useMemo(() => {
-    if (selectedParts.length === 0 || state.assignments.length === 0) return [];
-
-    const schedule = [];
-
-    // 各コマでユーザーがどの部屋にいるべきかを判定
-    for (let s = 0; s < numSlots; s++) {
-      const slotAsms = state.assignments.filter(asm => asm.slotIndex === s);
-      
-      let assignedAsm: Assignment | null = null;
-      let isPersonal = false;
-      let activePart: SelectedPart | null = null;
-
-      // 1. 合同練習を探す (自分が選択したパートのいずれかがアサインされているか)
-      for (const part of selectedParts) {
-        const found = slotAsms.find(asm => {
-          if (!asm.entryId || asm.isPersonalPractice) return false;
-          const entry = state.entries.find(e => e.id === asm.entryId);
-          return (
-            entry &&
-            entry.songId === part.songId &&
-            entry.parts.some(p => p.instrumentId === part.instrumentId && p.partIndex === part.partIndex)
-          );
-        });
-
-        if (found) {
-          assignedAsm = found;
-          activePart = part;
-          break;
-        }
-      }
-
-      // 2. 合同練習がない場合、個人練習としてどの部屋にアサインされているかをシミュレートする
-      if (!assignedAsm) {
-        // 全パートリスト
-        const allPartsList: Array<{ songId: string; instrumentId: string; partIndex: number }> = [];
-        for (const song of state.songs) {
-          if (!song || !song.parts || typeof song.parts !== 'object') continue;
-          for (const instId of Object.keys(song.parts)) {
-            const partCount = song.parts[instId];
-            if (typeof partCount !== 'number' || partCount <= 0) continue;
-            for (let idx = 0; idx < partCount; idx++) {
-              allPartsList.push({ songId: song.id, instrumentId: instId, partIndex: idx });
-            }
-          }
-        }
-
-        // コマ s で練習アサインされているパート
-        const activeParts: typeof allPartsList = [];
-        for (const asm of slotAsms) {
-          if (asm.entryId) {
-            const entry = state.entries.find(e => e.id === asm.entryId);
-            if (entry) {
-              for (const p of entry.parts) {
-                activeParts.push({ songId: entry.songId, instrumentId: p.instrumentId, partIndex: p.partIndex });
-              }
-            }
-          }
-        }
-
-        // 余りパート
-        const idleParts = allPartsList.filter(
-          ap => !activeParts.some(act => act.songId === ap.songId && act.instrumentId === ap.instrumentId && act.partIndex === ap.partIndex)
-        );
-
-        // 個人練習部屋候補
-        const personalPracticeRooms: typeof state.rooms = [];
-        for (const room of state.rooms) {
-          const isAssigned = slotAsms.some(asm => asm.roomId === room.id && asm.entryId);
-          if (!isAssigned) {
-            if (room.isPersonalPracticeCandidate || room.permanentInstrumentId) {
-              personalPracticeRooms.push(room);
-            }
-          }
-        }
-
-        // シミュレーション実行して、自分が選択した最初のパートの行き先を探す
-        // (個人練習部屋は代表して 1 つの部屋にいるものとみなす)
-        let currentRoomIdx = 0;
-        let currentRoomRemainingCap = personalPracticeRooms[currentRoomIdx] ? personalPracticeRooms[currentRoomIdx].capacity : 0;
-        let myPracticeRoomId: string | null = null;
-
-        for (const idlePart of idleParts) {
-          while (currentRoomIdx < personalPracticeRooms.length && currentRoomRemainingCap <= 0) {
-            currentRoomIdx++;
-            if (personalPracticeRooms[currentRoomIdx]) {
-              currentRoomRemainingCap = personalPracticeRooms[currentRoomIdx].capacity;
-            }
-          }
-
-          if (currentRoomIdx < personalPracticeRooms.length) {
-            // 自分の担当パートのいずれかが一致するか
-            const matchedMyPart = selectedParts.find(
-              sp => sp.songId === idlePart.songId && sp.instrumentId === idlePart.instrumentId && sp.partIndex === idlePart.partIndex
-            );
-
-            if (matchedMyPart) {
-              myPracticeRoomId = personalPracticeRooms[currentRoomIdx].id;
-              activePart = matchedMyPart;
-              break;
-            }
-            currentRoomRemainingCap--;
-          } else {
-            break;
-          }
-        }
-
-        if (myPracticeRoomId) {
-          assignedAsm = slotAsms.find(asm => asm.roomId === myPracticeRoomId) || null;
-          isPersonal = true;
-        }
-      }
-
-      const room = state.rooms.find(r => r.id === assignedAsm?.roomId);
-      schedule.push({
-        slotIndex: s,
-        assignment: assignedAsm,
-        room,
-        isPersonal,
-        activePart
-      });
-    }
-
-    return schedule;
-  }, [selectedParts, state.assignments, state.entries, state.rooms, state.songs, numSlots]);
+    return calculateUserSchedule(selectedParts, state, numSlots);
+  }, [selectedParts, state, numSlots]);
 
   return (
     <div>
