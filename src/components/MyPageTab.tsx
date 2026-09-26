@@ -1,8 +1,9 @@
 import { useState, useMemo, useEffect } from 'react';
-import type { ScheduleState, SelectedPart } from '../types';
+import type { ScheduleState, SelectedPart, GlobalPartRef } from '../types';
 import { calculateNumSlots, getSlotTimeRange, formatPartName } from '../utils/scheduler';
 import { loadSavedSelectedParts, saveSelectedParts, sanitizeSelectedParts } from '../utils/partStorage';
 import { getAvailableParts, calculateUserSchedule } from '../utils/personalPractice';
+import { isSameGlobalPart } from '../utils/partUtils';
 import { User, MapPin, AlertCircle, CheckCircle, Clock, Info, ChevronDown, ChevronUp } from 'lucide-react';
 import { useOptionalSchedule } from '../context/ScheduleContext';
 
@@ -31,12 +32,7 @@ export default function MyPageTab(props: MyPageTabProps) {
       const sanitized = sanitizeSelectedParts(prev, state.songs);
       const isChanged =
         sanitized.length !== prev.length ||
-        sanitized.some(
-          (p, idx) =>
-            p.songId !== prev[idx].songId ||
-            p.instrumentId !== prev[idx].instrumentId ||
-            p.partIndex !== prev[idx].partIndex
-        );
+        sanitized.some((p, idx) => !isSameGlobalPart(p, prev[idx]));
 
       if (isChanged) {
         saveSelectedParts(sanitized);
@@ -57,14 +53,13 @@ export default function MyPageTab(props: MyPageTabProps) {
 
   // 担当パートを追加・削除する
   const togglePartSelection = (songId: string, instrumentId: string, partIndex: number) => {
+    const target: GlobalPartRef = { songId, instrumentId, partIndex };
     setSelectedParts(prev => {
-      const isSelected = prev.some(
-        p => p.songId === songId && p.instrumentId === instrumentId && p.partIndex === partIndex
-      );
+      const isSelected = prev.some(p => isSameGlobalPart(p, target));
 
       const next = isSelected
-        ? prev.filter(p => !(p.songId === songId && p.instrumentId === instrumentId && p.partIndex === partIndex))
-        : [...prev, { songId, instrumentId, partIndex }];
+        ? prev.filter(p => !isSameGlobalPart(p, target))
+        : [...prev, target];
 
       saveSelectedParts(next);
       return next;
@@ -184,8 +179,8 @@ export default function MyPageTab(props: MyPageTabProps) {
                   </div>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
                     {songParts.map(item => {
-                      const isSelected = selectedParts.some(
-                        p => p.songId === item.song.id && p.instrumentId === item.inst.id && p.partIndex === item.partIndex
+                      const isSelected = selectedParts.some(p =>
+                        isSameGlobalPart(p, { songId: item.song.id, instrumentId: item.inst.id, partIndex: item.partIndex })
                       );
                       return (
                         <button

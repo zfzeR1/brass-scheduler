@@ -1,9 +1,7 @@
-import type { Song, Instrument } from '../../../types';
+import type { Song, Instrument, LocalPartRef } from '../../../types';
 import { formatPartName } from '../../../utils/scheduler';
 
-export interface SongPartItem {
-  instrumentId: string;
-  partIndex: number;
+export interface SongPartItem extends LocalPartRef {
   label: string;
 }
 

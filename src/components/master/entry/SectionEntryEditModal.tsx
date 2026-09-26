@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import type { Entry, Song, Instrument } from '../../../types';
+import type { Entry, Song, Instrument, LocalPartRef } from '../../../types';
 import { getSongParts } from './entryHelpers';
+import { isSameLocalPart } from '../../../utils/partUtils';
 import { X, CheckCheck, XSquare } from 'lucide-react';
 
 export interface SectionEntryEditModalProps {
@@ -22,7 +23,7 @@ export default function SectionEntryEditModal({
 }: SectionEntryEditModalProps) {
   const [section, setSection] = useState<string>(() => entry?.section || '');
   const [priority, setPriority] = useState<'low' | 'medium' | 'high'>(() => entry?.priority || 'medium');
-  const [parts, setParts] = useState<Array<{ instrumentId: string; partIndex: number }>>(() => entry ? [...entry.parts] : []);
+  const [parts, setParts] = useState<LocalPartRef[]>(() => entry ? [...entry.parts] : []);
 
   useEffect(() => {
     if (entry) {
@@ -40,11 +41,12 @@ export default function SectionEntryEditModal({
   const availableParts = getSongParts(entry.songId, songs, instruments);
 
   const togglePart = (instrumentId: string, partIndex: number) => {
-    const isChecked = parts.some(p => p.instrumentId === instrumentId && p.partIndex === partIndex);
+    const target = { instrumentId, partIndex };
+    const isChecked = parts.some(p => isSameLocalPart(p, target));
     if (isChecked) {
-      setParts(prev => prev.filter(p => !(p.instrumentId === instrumentId && p.partIndex === partIndex)));
+      setParts(prev => prev.filter(p => !isSameLocalPart(p, target)));
     } else {
-      setParts(prev => [...prev, { instrumentId, partIndex }]);
+      setParts(prev => [...prev, target]);
     }
   };
 
@@ -153,9 +155,7 @@ export default function SectionEntryEditModal({
 
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem', maxHeight: '220px', overflowY: 'auto', padding: '0.75rem', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', background: 'var(--bg-secondary)' }}>
               {availableParts.map(p => {
-                const isChecked = parts.some(
-                  ep => ep.instrumentId === p.instrumentId && ep.partIndex === p.partIndex
-                );
+                const isChecked = parts.some(ep => isSameLocalPart(ep, p));
                 return (
                   <button
                     key={`${p.instrumentId}_${p.partIndex}`}
