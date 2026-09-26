@@ -4,12 +4,20 @@ import { calculateNumSlots, getSlotTimeRange, formatPartName } from '../utils/sc
 import { loadSavedSelectedParts, saveSelectedParts, sanitizeSelectedParts } from '../utils/partStorage';
 import { getAvailableParts, calculateUserSchedule } from '../utils/personalPractice';
 import { User, MapPin, AlertCircle, CheckCircle, Clock, Info, ChevronDown, ChevronUp } from 'lucide-react';
+import { useOptionalSchedule } from '../context/ScheduleContext';
 
-interface MyPageTabProps {
-  state: ScheduleState;
+export interface MyPageTabProps {
+  state?: ScheduleState;
 }
 
-export default function MyPageTab({ state }: MyPageTabProps) {
+export default function MyPageTab(props: MyPageTabProps) {
+  const scheduleCtx = useOptionalSchedule();
+  const state = props.state ?? scheduleCtx?.state;
+
+  if (!state) {
+    return null;
+  }
+
   const [selectedParts, setSelectedParts] = useState<SelectedPart[]>(() => {
     return loadSavedSelectedParts(state.songs);
   });

@@ -16,13 +16,22 @@ import {
   Info,
   Calendar
 } from 'lucide-react';
+import { useOptionalSchedule } from '../context/ScheduleContext';
 
 export interface ShareTabProps {
-  state: ScheduleState;
+  state?: ScheduleState;
   onNavigateToSchedule: () => void;
 }
 
-export default function ShareTab({ state, onNavigateToSchedule }: ShareTabProps) {
+export default function ShareTab(props: ShareTabProps) {
+  const scheduleCtx = useOptionalSchedule();
+  const state = props.state ?? scheduleCtx?.state;
+  const { onNavigateToSchedule } = props;
+
+  if (!state) {
+    throw new Error('ShareTab must be used within a ScheduleProvider or provided with state prop');
+  }
+
   const [shareCopied, setShareCopied] = useState<'url' | 'line' | false>(false);
   const [showQR, setShowQR] = useState(false);
   const [qrUrl, setQrUrl] = useState<string>('');

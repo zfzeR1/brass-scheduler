@@ -13,14 +13,24 @@ import ViolationSummaryPanel from './schedule/ViolationSummaryPanel';
 import CellEditModal from './schedule/CellEditModal';
 import TimetableGrid from './schedule/TimetableGrid';
 import MobileSlotView from './schedule/MobileSlotView';
+import { useOptionalSchedule } from '../context/ScheduleContext';
 
-interface ScheduleTabProps {
-  state: ScheduleState;
-  setState: React.Dispatch<React.SetStateAction<ScheduleState>>;
+export interface ScheduleTabProps {
+  state?: ScheduleState;
+  setState?: React.Dispatch<React.SetStateAction<ScheduleState>>;
   undoControls?: ScheduleUndoManager;
 }
 
-export default function ScheduleTab({ state, setState, undoControls }: ScheduleTabProps) {
+export default function ScheduleTab(props: ScheduleTabProps) {
+  const scheduleCtx = useOptionalSchedule();
+  const state = props.state ?? scheduleCtx?.state;
+  const setState = props.setState ?? scheduleCtx?.setState;
+  const contextUndo = scheduleCtx?.undoControls;
+
+  if (!state || !setState) {
+    throw new Error('ScheduleTab must be used within a ScheduleProvider or provided with state and setState props');
+  }
+
   const fallbackUndo = useScheduleUndo(state.assignments, (newAssignments) => {
     setState(prev => ({
       ...prev,
@@ -33,7 +43,7 @@ export default function ScheduleTab({ state, setState, undoControls }: ScheduleT
     undo,
     canUndo,
     historyLength
-  } = undoControls ?? fallbackUndo;
+  } = props.undoControls ?? contextUndo ?? fallbackUndo;
 
   const isMobile = useIsMobile();
   const [mobileSlot, setMobileSlot] = useState(0);

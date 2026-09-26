@@ -6,14 +6,24 @@ import SongFormSection from './master/SongFormSection';
 import DuplicateNGSection from './master/DuplicateNGSection';
 import SectionEntrySection from './master/SectionEntrySection';
 import { CheckSquare } from 'lucide-react';
+import { useOptionalSchedule } from '../context/ScheduleContext';
 
 export interface MasterDataTabProps {
-  state: ScheduleState;
-  setState: React.Dispatch<React.SetStateAction<ScheduleState>>;
+  state?: ScheduleState;
+  setState?: React.Dispatch<React.SetStateAction<ScheduleState>>;
   onProceedToSchedule?: () => void;
 }
 
-export default function MasterDataTab({ state, setState, onProceedToSchedule }: MasterDataTabProps) {
+export default function MasterDataTab(props: MasterDataTabProps) {
+  const scheduleCtx = useOptionalSchedule();
+  const state = props.state ?? scheduleCtx?.state;
+  const setState = props.setState ?? scheduleCtx?.setState;
+  const { onProceedToSchedule } = props;
+
+  if (!state || !setState) {
+    throw new Error('MasterDataTab must be used within a ScheduleProvider or provided with state and setState props');
+  }
+
   const [subTab, setSubTab] = useState<'settings' | 'songs' | 'ng-pairs' | 'entries'>('settings');
 
   // 未入力事前チェック（ガード機能）
