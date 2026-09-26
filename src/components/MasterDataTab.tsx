@@ -11,6 +11,13 @@ import type {
 import { STANDARD_PART_COUNTS } from '../types';
 import { Plus, Trash2, Clock, MapPin, CheckSquare, Square, ArrowUp, ArrowDown, Edit3, ChevronRight } from 'lucide-react';
 import { formatPartName } from '../utils/scheduler';
+import {
+  removeRoomWithCascade,
+  removeSongWithCascade,
+  removeEntryWithCascade,
+  removeNGPairWithCascade,
+  sanitizeScheduleState
+} from '../utils/scheduleIntegrity';
 
 const PART_COUNT_OPTIONS = [
   { value: 0, label: '-' },
@@ -105,10 +112,7 @@ export default function MasterDataTab({ state, setState, onProceedToSchedule }: 
   };
 
   const handleRemoveRoom = (id: string) => {
-    setState(prev => ({
-      ...prev,
-      rooms: prev.rooms.filter(r => r.id !== id)
-    }));
+    setState(prev => removeRoomWithCascade(prev, id));
   };
 
 
@@ -224,10 +228,17 @@ export default function MasterDataTab({ state, setState, onProceedToSchedule }: 
     for (const [instId, count] of Object.entries(editSongParts)) {
       if (count > 0) filteredParts[instId] = count;
     }
-    setState(prev => ({
-      ...prev,
-      songs: prev.songs.map(s => s.id === songId ? { ...s, parts: filteredParts } : s)
-    }));
+    setState(prev => {
+      const nextInstruments = editSongExtraInsts.length > 0
+        ? [...prev.instruments, ...editSongExtraInsts]
+        : prev.instruments;
+      const nextSongs = prev.songs.map(s => s.id === songId ? { ...s, parts: filteredParts } : s);
+      return sanitizeScheduleState({
+        ...prev,
+        instruments: nextInstruments,
+        songs: nextSongs
+      });
+    });
     setEditingSongId(null);
     setEditSongExtraInsts([]);
   };
@@ -254,10 +265,7 @@ export default function MasterDataTab({ state, setState, onProceedToSchedule }: 
   };
 
   const handleRemoveSong = (id: string) => {
-    setState(prev => ({
-      ...prev,
-      songs: prev.songs.filter(s => s.id !== id)
-    }));
+    setState(prev => removeSongWithCascade(prev, id));
   };
 
   // --- 3. 重複NG設定（兼任）のハンドラー ---
@@ -299,10 +307,7 @@ export default function MasterDataTab({ state, setState, onProceedToSchedule }: 
   };
 
   const handleRemoveNGPair = (id: string) => {
-    setState(prev => ({
-      ...prev,
-      duplicateNGPairs: prev.duplicateNGPairs.filter(p => p.id !== id)
-    }));
+    setState(prev => removeNGPairWithCascade(prev, id));
   };
 
   // --- 4. 練習エントリー登録のハンドラー ---
@@ -344,10 +349,7 @@ export default function MasterDataTab({ state, setState, onProceedToSchedule }: 
   };
 
   const handleRemoveEntry = (id: string) => {
-    setState(prev => ({
-      ...prev,
-      entries: prev.entries.filter(e => e.id !== id)
-    }));
+    setState(prev => removeEntryWithCascade(prev, id));
   };
 
   const handleStartEditEntry = (entry: Entry) => {
@@ -358,10 +360,28 @@ export default function MasterDataTab({ state, setState, onProceedToSchedule }: 
   };
 
   const handleSaveEditEntry = (id: string) => {
-    setState(prev => ({
-      ...prev,
-      entries: prev.entries.map(e => e.id === id ? { ...e, section: editSection, priority: editPriority, parts: editParts } : e)
-    }));
+    setState(prev => {
+      const nextEntries = prev.entries.map(e => e.id === id ? { ...e, section: editSection, priority: editPriority, parts: editParts } : e);
+      const targetEntry = nextEntries.find(e => e.id === id);
+      const nextAssignments = prev.assignments.map(asm => {
+        if (asm.entryId === id && targetEntry) {
+          return {
+            ...asm,
+            parts: targetEntry.parts.map(p => ({
+              instrumentId: p.instrumentId,
+              partIndex: p.partIndex,
+              songId: targetEntry.songId
+            }))
+          };
+        }
+        return asm;
+      });
+      return {
+        ...prev,
+        entries: nextEntries,
+        assignments: nextAssignments
+      };
+    });
     setEditingEntryId(null);
   };
 

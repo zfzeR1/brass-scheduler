@@ -18,6 +18,7 @@ import { useScheduleUndo } from './hooks/useScheduleUndo';
 import { Music, Settings, Calendar, Share2, Info, ChevronRight, Copy, ExternalLink, Smartphone, MessageCircle, X, Loader2, Camera } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { encodeScheduleData, decodeScheduleData, generateShareUrl } from './utils/shareEncoding';
+import { sanitizeScheduleState } from './utils/scheduleIntegrity';
 import TimetableExportModal from './components/TimetableExportModal';
 
 // --- 初期データ ---
@@ -162,7 +163,7 @@ export default function App() {
       try {
         const parsed = JSON.parse(saved);
         if (parsed.rooms && parsed.songs && parsed.entries && parsed.instruments?.length >= 19) {
-          return parsed;
+          return sanitizeScheduleState(parsed);
         }
       } catch (e) {
         console.error('Failed to parse saved state', e);
@@ -252,7 +253,7 @@ export default function App() {
             const decoded = decodeScheduleData(json.data);
             if (decoded) {
               setIsMemberMode(true);
-              setMemberData(decoded);
+              setMemberData(sanitizeScheduleState(decoded));
               setIsLoadingSchedule(false);
               return;
             }
@@ -272,7 +273,7 @@ export default function App() {
       const decoded = decodeScheduleData(data);
       if (decoded) {
         setIsMemberMode(true);
-        setMemberData(decoded);
+        setMemberData(sanitizeScheduleState(decoded));
       }
     }
   }, []);
