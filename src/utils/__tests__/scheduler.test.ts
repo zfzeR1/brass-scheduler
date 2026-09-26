@@ -4,7 +4,8 @@ import {
   getSlotTimeRange,
   formatPartName,
   evaluateSchedule,
-  generateSchedule
+  generateSchedule,
+  generateScheduleAsync
 } from '../scheduler';
 import type {
   ScheduleState,
@@ -474,5 +475,12 @@ describe('scheduler utility functions', () => {
       expect(preserved?.entryId).toBe('entry-1');
       expect(preserved?.parts[0].instrumentId).toBe('asax');
     });
+
+    it('generates schedule asynchronously via generateScheduleAsync', async () => {
+      const generated = await generateScheduleAsync(baseState);
+      expect(generated.length).toBe(4);
+      expect(generated.every(a => a.roomId && a.slotIndex !== undefined)).toBe(true);
+    });
   });
 });
+

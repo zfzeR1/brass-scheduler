@@ -68,26 +68,35 @@ export function isSamePart(
   return p1.instrumentId === p2.instrumentId && p1.partIndex === p2.partIndex;
 }
 
-// スケジュール全体の評価ロジック (最適化版)
-export function evaluateSchedule(
-  assignments: Assignment[],
+export interface EvaluationContext {
+  rooms: Room[];
+  instruments: Instrument[];
+  songs: Song[];
+  duplicateNGPairs: DuplicateNGPair[];
+  entries: Entry[];
+  numSlots: number;
+  instrumentMap: Map<string, Instrument>;
+  entryMap: Map<string, Entry>;
+  roomMap: Map<string, Room>;
+  ngSet: Set<string>;
+  allPartsList: Array<{ songId: string; instrumentId: string; partIndex: number }>;
+}
+
+/**
+ * スケジュール評価に必要なマスターデータとルックアップマップを事前構築します。
+ */
+export function createEvaluationContext(
   rooms: Room[],
   instruments: Instrument[],
   songs: Song[],
   duplicateNGPairs: DuplicateNGPair[],
   entries: Entry[],
-  numSlots: number,
-  includeViolations: boolean = false
-): { score: number; violations: string[] } {
-  let score = 0;
-  const violations: string[] = [];
-
-  // 1. マップとキャッシュの作成
+  numSlots: number
+): EvaluationContext {
   const instrumentMap = new Map<string, Instrument>(instruments.map(i => [i.id, i]));
   const entryMap = new Map<string, Entry>(entries.map(e => [e.id, e]));
   const roomMap = new Map<string, Room>(rooms.map(r => [r.id, r]));
 
-  // 重複NGの高速ルックアップ用セット
   const ngSet = new Set<string>();
   for (const pair of duplicateNGPairs) {
     const key1 = `${pair.partA.songId}_${pair.partA.instrumentId}_${pair.partA.partIndex}|${pair.partB.songId}_${pair.partB.instrumentId}_${pair.partB.partIndex}`;
@@ -96,20 +105,60 @@ export function evaluateSchedule(
     ngSet.add(key2);
   }
 
-  // 全パート一覧を作成
   const allPartsList: Array<{ songId: string; instrumentId: string; partIndex: number }> = [];
   for (const song of songs) {
+    if (!song || !song.parts || typeof song.parts !== 'object') continue;
     for (const instId of Object.keys(song.parts)) {
       const partCount = song.parts[instId];
-      for (let idx = 0; idx < partCount; idx++) {
-        allPartsList.push({
-          songId: song.id,
-          instrumentId: instId,
-          partIndex: idx
-        });
+      if (typeof partCount === 'number' && partCount > 0) {
+        for (let idx = 0; idx < partCount; idx++) {
+          allPartsList.push({
+            songId: song.id,
+            instrumentId: instId,
+            partIndex: idx
+          });
+        }
       }
     }
   }
+
+  return {
+    rooms,
+    instruments,
+    songs,
+    duplicateNGPairs,
+    entries,
+    numSlots,
+    instrumentMap,
+    entryMap,
+    roomMap,
+    ngSet,
+    allPartsList
+  };
+}
+
+/**
+ * 事前構築されたコンテキストを用いてスケジュールを高速評価します。
+ */
+export function evaluateScheduleWithContext(
+  assignments: Assignment[],
+  context: EvaluationContext,
+  includeViolations: boolean = false
+): { score: number; violations: string[] } {
+  let score = 0;
+  const violations: string[] = [];
+
+  const {
+    rooms,
+    entries,
+    songs,
+    numSlots,
+    instrumentMap,
+    entryMap,
+    roomMap,
+    ngSet,
+    allPartsList
+  } = context;
 
   // コマごとに整理
   const slotsAssignments: Assignment[][] = Array.from({ length: numSlots }, () => []);
@@ -142,7 +191,6 @@ export function evaluateSchedule(
   // 3. 各コマの制約検証
   for (let s = 0; s < numSlots; s++) {
     const currentSlotAsms = slotsAssignments[s];
-    const activeEntriesInSlot: Entry[] = [];
     const assignedRoomIds = new Set<string>();
     const activePartsInSlot = new Set<string>();
     const slotMap = partRoomsBySlot[s];
@@ -157,7 +205,6 @@ export function evaluateSchedule(
       const entry = entryMap.get(asm.entryId);
       if (!entry) continue;
 
-      activeEntriesInSlot.push(entry);
       assignedRoomIds.add(asm.roomId);
 
       // キャパシティ管理
@@ -192,12 +239,20 @@ export function evaluateSchedule(
     // B. 重複NG（兼任パート）の衝突チェック
     const activePartsList = Array.from(activePartsInSlot);
     for (let i = 0; i < activePartsList.length; i++) {
-      const [songA, instA, partIndexAStr] = activePartsList[i].split('_');
-      const partIndexA = Number(partIndexAStr);
+      const partKeyA = activePartsList[i];
+      const firstUnderscoreA = partKeyA.indexOf('_');
+      const secondUnderscoreA = partKeyA.indexOf('_', firstUnderscoreA + 1);
+      const songA = partKeyA.slice(0, firstUnderscoreA);
+      const instA = partKeyA.slice(firstUnderscoreA + 1, secondUnderscoreA);
+      const partIndexA = Number(partKeyA.slice(secondUnderscoreA + 1));
 
       for (let j = i + 1; j < activePartsList.length; j++) {
-        const [songB, instB, partIndexBStr] = activePartsList[j].split('_');
-        const partIndexB = Number(partIndexBStr);
+        const partKeyB = activePartsList[j];
+        const firstUnderscoreB = partKeyB.indexOf('_');
+        const secondUnderscoreB = partKeyB.indexOf('_', firstUnderscoreB + 1);
+        const songB = partKeyB.slice(0, firstUnderscoreB);
+        const instB = partKeyB.slice(firstUnderscoreB + 1, secondUnderscoreB);
+        const partIndexB = Number(partKeyB.slice(secondUnderscoreB + 1));
 
         // 1. 自動重複NG: 別の曲で「同じ楽器かつ同じパート」の場合
         if (songA !== songB && instA === instB && partIndexA === partIndexB) {
@@ -206,11 +261,11 @@ export function evaluateSchedule(
             const inst = instrumentMap.get(instA);
             violations.push(`コマ ${s + 1}: 別の曲で同じパート「${inst?.name || instA} (${partIndexA + 1}st)」が同時に練習に割り当てられています（自動衝突回避）。`);
           }
-          continue; // 自動重複NGで衝突したペアは、手動NGのチェックをスキップしてよい
+          continue;
         }
 
         // 2. 手動重複NG: ユーザーが明示的に設定したペアの場合
-        const key = `${activePartsList[i]}|${activePartsList[j]}`;
+        const key = `${partKeyA}|${partKeyB}`;
         if (ngSet.has(key)) {
           score -= 150000;
           if (includeViolations) {
@@ -245,7 +300,6 @@ export function evaluateSchedule(
       let overflowCount = 0;
 
       for (const part of idleParts) {
-        // 安全性を高めたwhile条件
         while (currentRoomIdx < personalPracticeRooms.length && currentRoomRemainingCap <= 0) {
           currentRoomIdx++;
           if (currentRoomIdx < personalPracticeRooms.length) {
@@ -324,10 +378,10 @@ export function evaluateSchedule(
 
   for (const entry of entries) {
     if (!assignedEntryIds.has(entry.id)) {
-      score -= 200000; // 重大な制約違反ペナルティ
+      score -= 200000;
       if (includeViolations) {
         const song = songs.find(s => s.id === entry.songId);
-        violations.push(`練習エントリー「${song?.name || ''} - ${entry.section}」がスケジュール内に割り当てられていません（必須実施）。`);
+        violations.push(`練習エントリー「${song?.name || ''} - ${entry.section}」がスケジュール内に割り当てられています（必須実施）。`);
       }
     }
   }
@@ -335,7 +389,22 @@ export function evaluateSchedule(
   return { score, violations };
 }
 
-// 焼きなまし法（Simulated Annealing）を用いた自動生成ロジック
+// スケジュール全体の評価ロジック
+export function evaluateSchedule(
+  assignments: Assignment[],
+  rooms: Room[],
+  instruments: Instrument[],
+  songs: Song[],
+  duplicateNGPairs: DuplicateNGPair[],
+  entries: Entry[],
+  numSlots: number,
+  includeViolations: boolean = false
+): { score: number; violations: string[] } {
+  const context = createEvaluationContext(rooms, instruments, songs, duplicateNGPairs, entries, numSlots);
+  return evaluateScheduleWithContext(assignments, context, includeViolations);
+}
+
+// 焼きなまし法（Simulated Annealing）を用いた自動生成ロジック (最適化版: メモリアロケーションゼロ・インプレース反転復元・キャッシュ評価)
 export function generateSchedule(
   state: ScheduleState,
   startSlotIndex: number = 0
@@ -350,7 +419,7 @@ export function generateSchedule(
 
   if (numSlots <= 0 || rooms.length === 0) return [];
 
-  let currentAssignments: Assignment[] = [];
+  const currentAssignments: Assignment[] = [];
   const assignmentMap = new Map<string, Assignment>();
   for (const asm of state.assignments) {
     assignmentMap.set(`${asm.slotIndex}_${asm.roomId}`, asm);
@@ -362,7 +431,10 @@ export function generateSchedule(
       const existing = assignmentMap.get(key);
 
       if (existing && (existing.isLocked || s < startSlotIndex)) {
-        currentAssignments.push({ ...existing });
+        currentAssignments.push({
+          ...existing,
+          parts: [...(existing.parts || [])]
+        });
       } else {
         currentAssignments.push({
           id: key,
@@ -377,9 +449,12 @@ export function generateSchedule(
     }
   }
 
-  // 初期評価 (探索中は includeViolations を false にする)
-  let bestAssignments = currentAssignments.map(asm => ({ ...asm }));
-  let bestEval = evaluateSchedule(bestAssignments, rooms, instruments, songs, duplicateNGPairs, entries, numSlots, false);
+  const context = createEvaluationContext(rooms, instruments, songs, duplicateNGPairs, entries, numSlots);
+
+  // 初期評価
+  let currentScore = evaluateScheduleWithContext(currentAssignments, context, false).score;
+  let bestScore = currentScore;
+  let bestAssignments = currentAssignments.map(asm => ({ ...asm, parts: [...asm.parts] }));
 
   const initialTemp = 100.0;
   const finalTemp = 0.1;
@@ -387,23 +462,51 @@ export function generateSchedule(
   const iterationsPerTemp = 200;
   let temp = initialTemp;
 
-  const assignableEntries = [...entries];
+  // エントリーのpartsオブジェクトを事前構築（探索中のアロケーションを抑止）
+  const entryPartsMap = new Map<string, Array<{ instrumentId: string; partIndex: number; songId: string }>>();
+  for (const entry of entries) {
+    entryPartsMap.set(
+      entry.id,
+      entry.parts.map(p => ({
+        instrumentId: p.instrumentId,
+        partIndex: p.partIndex,
+        songId: entry.songId
+      }))
+    );
+  }
 
-  const getMutableAssignments = (asms: Assignment[]): Assignment[] => {
-    return asms.filter(asm => asm.slotIndex >= startSlotIndex && !asm.isLocked);
-  };
+  // 変更対象のアサインメントを事前分類
+  const mutableAsms = currentAssignments.filter(asm => asm.slotIndex >= startSlotIndex && !asm.isLocked);
+  if (mutableAsms.length === 0) {
+    return currentAssignments;
+  }
+
+  // スロットごとのmutable、部屋ごとのmutableを事前グループ化
+  const mutablesBySlot = new Map<number, Assignment[]>();
+  const mutablesByRoom = new Map<string, Assignment[]>();
+  for (const asm of mutableAsms) {
+    if (!mutablesBySlot.has(asm.slotIndex)) mutablesBySlot.set(asm.slotIndex, []);
+    mutablesBySlot.get(asm.slotIndex)!.push(asm);
+
+    if (!mutablesByRoom.has(asm.roomId)) mutablesByRoom.set(asm.roomId, []);
+    mutablesByRoom.get(asm.roomId)!.push(asm);
+  }
+
+  const assignableEntries = [...entries];
 
   while (temp > finalTemp) {
     for (let iter = 0; iter < iterationsPerTemp; iter++) {
-      const nextAssignments = currentAssignments.map(asm => ({ ...asm }));
-      const mutableAsms = getMutableAssignments(nextAssignments);
-
-      if (mutableAsms.length === 0) break;
-
       const targetAsm = mutableAsms[Math.floor(Math.random() * mutableAsms.length)];
       const action = Math.floor(Math.random() * 3);
 
+      const prevTargetEntryId = targetAsm.entryId;
+      const prevTargetParts = targetAsm.parts;
+      let otherAsm: Assignment | null = null;
+      let prevOtherEntryId: string | undefined = undefined;
+      let prevOtherParts: typeof targetAsm.parts = [];
+
       if (action === 0) {
+        // アサインの変更またはクリア
         const randVal = Math.random();
         if (randVal < 0.2) {
           targetAsm.entryId = undefined;
@@ -411,54 +514,69 @@ export function generateSchedule(
         } else {
           const entry = assignableEntries[Math.floor(Math.random() * assignableEntries.length)];
           targetAsm.entryId = entry.id;
-          targetAsm.parts = entry.parts.map(p => ({
-            instrumentId: p.instrumentId,
-            partIndex: p.partIndex,
-            songId: entry.songId
-          }));
+          targetAsm.parts = entryPartsMap.get(entry.id) || [];
         }
       } else if (action === 1) {
-        const sameSlotMutables = mutableAsms.filter(
-          asm => asm.slotIndex === targetAsm.slotIndex && asm.roomId !== targetAsm.roomId
-        );
-        if (sameSlotMutables.length > 0) {
-          const otherAsm = sameSlotMutables[Math.floor(Math.random() * sameSlotMutables.length)];
-          const tempEntry = targetAsm.entryId;
-          const tempParts = targetAsm.parts;
+        // 同じコマ内の別部屋と入れ替え
+        const slotCandidates = mutablesBySlot.get(targetAsm.slotIndex);
+        if (slotCandidates && slotCandidates.length > 1) {
+          let pick = slotCandidates[Math.floor(Math.random() * slotCandidates.length)];
+          if (pick === targetAsm) {
+            pick = slotCandidates[(slotCandidates.indexOf(targetAsm) + 1) % slotCandidates.length];
+          }
+          otherAsm = pick;
+          prevOtherEntryId = otherAsm.entryId;
+          prevOtherParts = otherAsm.parts;
 
-          targetAsm.entryId = otherAsm.entryId;
-          targetAsm.parts = otherAsm.parts;
-          otherAsm.entryId = tempEntry;
-          otherAsm.parts = tempParts;
+          targetAsm.entryId = prevOtherEntryId;
+          targetAsm.parts = prevOtherParts;
+          otherAsm.entryId = prevTargetEntryId;
+          otherAsm.parts = prevTargetParts;
+        } else {
+          continue;
         }
       } else {
-        const otherSlotMutables = mutableAsms.filter(
-          asm => asm.roomId === targetAsm.roomId && asm.slotIndex !== targetAsm.slotIndex
-        );
-        if (otherSlotMutables.length > 0) {
-          const otherAsm = otherSlotMutables[Math.floor(Math.random() * otherSlotMutables.length)];
-          const tempEntry = targetAsm.entryId;
-          const tempParts = targetAsm.parts;
+        // 同じ部屋の別コマと入れ替え
+        const roomCandidates = mutablesByRoom.get(targetAsm.roomId);
+        if (roomCandidates && roomCandidates.length > 1) {
+          let pick = roomCandidates[Math.floor(Math.random() * roomCandidates.length)];
+          if (pick === targetAsm) {
+            pick = roomCandidates[(roomCandidates.indexOf(targetAsm) + 1) % roomCandidates.length];
+          }
+          otherAsm = pick;
+          prevOtherEntryId = otherAsm.entryId;
+          prevOtherParts = otherAsm.parts;
 
-          targetAsm.entryId = otherAsm.entryId;
-          targetAsm.parts = otherAsm.parts;
-          otherAsm.entryId = tempEntry;
-          otherAsm.parts = tempParts;
+          targetAsm.entryId = prevOtherEntryId;
+          targetAsm.parts = prevOtherParts;
+          otherAsm.entryId = prevTargetEntryId;
+          otherAsm.parts = prevTargetParts;
+        } else {
+          continue;
         }
       }
 
-      // 探索中は includeViolations: false にして不要な文字列生成と配列pushを抑止
-      const currentEval = evaluateSchedule(currentAssignments, rooms, instruments, songs, duplicateNGPairs, entries, numSlots, false);
-      const nextEval = evaluateSchedule(nextAssignments, rooms, instruments, songs, duplicateNGPairs, entries, numSlots, false);
-
-      const delta = nextEval.score - currentEval.score;
+      // 新しい配置のスコアを高速評価
+      const nextScore = evaluateScheduleWithContext(currentAssignments, context, false).score;
+      const delta = nextScore - currentScore;
 
       if (delta > 0 || Math.random() < Math.exp(delta / temp)) {
-        currentAssignments = nextAssignments;
-        
-        if (nextEval.score > bestEval.score) {
-          bestAssignments = nextAssignments.map(asm => ({ ...asm }));
-          bestEval = nextEval;
+        // 採択（変更を確定）
+        currentScore = nextScore;
+        if (currentScore > bestScore) {
+          bestScore = currentScore;
+          bestAssignments = currentAssignments.map(asm => ({ ...asm, parts: [...asm.parts] }));
+        }
+      } else {
+        // 棄却（変更を元に戻す - メモリアロケーションゼロ）
+        if (action === 0) {
+          targetAsm.entryId = prevTargetEntryId;
+          targetAsm.parts = prevTargetParts;
+        } else if (otherAsm) {
+          targetAsm.entryId = prevTargetEntryId;
+          targetAsm.parts = prevTargetParts;
+          otherAsm.entryId = prevOtherEntryId;
+          otherAsm.parts = prevOtherParts;
         }
       }
     }
@@ -578,4 +696,19 @@ export function formatPartName(
   }
 
   return `${instName} ${partIndex + 1}`;
+}
+
+/**
+ * スケジュール自動生成を非同期（非ブロッキング）で実行します。
+ * UIスレッドの描画更新（ローディングスピナーの表示）を挟んでから計算を開始します。
+ */
+export function generateScheduleAsync(
+  state: ScheduleState,
+  startSlotIndex: number = 0
+): Promise<Assignment[]> {
+  return new Promise((resolve) => {
+    setTimeout(() => {
+      resolve(generateSchedule(state, startSlotIndex));
+    }, 16);
+  });
 }

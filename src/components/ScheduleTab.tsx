@@ -2,12 +2,12 @@ import React, { useState, useMemo } from 'react';
 import type { ScheduleState, Assignment } from '../types';
 import {
   calculateNumSlots,
-  generateSchedule,
+  generateScheduleAsync,
   evaluateSchedule
 } from '../utils/scheduler';
 import { useScheduleUndo, type ScheduleUndoManager } from '../hooks/useScheduleUndo';
 import { useIsMobile } from '../hooks/useMediaQuery';
-import { Play, RotateCcw, Camera, Info } from 'lucide-react';
+import { Play, RotateCcw, Camera, Info, Loader2 } from 'lucide-react';
 import TimetableExportModal from './TimetableExportModal';
 import ViolationSummaryPanel from './schedule/ViolationSummaryPanel';
 import CellEditModal from './schedule/CellEditModal';
@@ -40,6 +40,7 @@ export default function ScheduleTab({ state, setState, undoControls }: ScheduleT
   const [swapSource, setSwapSource] = useState<{ slotIndex: number; roomId: string } | null>(null);
   const [editTarget, setEditTarget] = useState<{ slotIndex: number; roomId: string } | null>(null);
   const [showExportModal, setShowExportModal] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
 
   const numSlots = useMemo(() => {
     return calculateNumSlots(
@@ -64,10 +65,16 @@ export default function ScheduleTab({ state, setState, undoControls }: ScheduleT
     );
   }, [state.assignments, state.rooms, state.instruments, state.songs, state.duplicateNGPairs, state.entries, numSlots]);
 
-  // 自動スケジュール生成を実行する
-  const handleAutoGenerate = (startSlot: number = 0) => {
-    const updatedAssignments = generateSchedule(state, startSlot);
-    setAssignmentsWithHistory(updatedAssignments);
+  // 自動スケジュール生成を実行する (非同期・非ブロッキング＆ローディング表示)
+  const handleAutoGenerate = async (startSlot: number = 0) => {
+    if (isGenerating) return;
+    setIsGenerating(true);
+    try {
+      const updatedAssignments = await generateScheduleAsync(state, startSlot);
+      setAssignmentsWithHistory(updatedAssignments);
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
   // ロックの切り替え
@@ -228,8 +235,14 @@ export default function ScheduleTab({ state, setState, undoControls }: ScheduleT
       {/* Control Actions */}
       <div className="glass-card" style={{ marginBottom: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem' }}>
         <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
-          <button className="btn btn-primary" onClick={() => handleAutoGenerate(0)} style={{ fontSize: '0.85rem', padding: '0.6rem 1.25rem' }}>
-            <Play size={16} /> スケジュールを自動生成
+          <button
+            className="btn btn-primary"
+            onClick={() => handleAutoGenerate(0)}
+            disabled={isGenerating}
+            style={{ fontSize: '0.85rem', padding: '0.6rem 1.25rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
+          >
+            {isGenerating ? <Loader2 size={16} className="spin" /> : <Play size={16} />}
+            <span>{isGenerating ? '最適化計算中...' : 'スケジュールを自動生成'}</span>
           </button>
 
           <button
