@@ -1,39 +1,50 @@
 import React from 'react';
 import type { ScheduleState, TimeSettings, Room } from '../../types';
 import { removeRoomWithCascade } from '../../utils/scheduleIntegrity';
-import { Clock, MapPin, Plus, Trash2 } from 'lucide-react';
+import { calculateNumSlots } from '../../utils/scheduler';
+import { AlertCircle, Clock, MapPin, Plus, Trash2 } from 'lucide-react';
 
 export interface TimeAndRoomSectionProps {
   state: ScheduleState;
   setState: React.Dispatch<React.SetStateAction<ScheduleState>>;
 }
 
-export default function TimeAndRoomSection({ state, setState }: TimeAndRoomSectionProps) {
-  // プルダウン用の時間リスト (5分刻み)
-  const generateTimeOptions = () => {
-    const options: string[] = [];
-    for (let h = 0; h < 24; h++) {
-      for (let m = 0; m < 60; m += 5) {
-        const hrs = String(h).padStart(2, '0');
-        const mins = String(m).padStart(2, '0');
-        options.push(`${hrs}:${mins}`);
-      }
+// プルダウン用の時間リスト (5分刻み、コンポーネント外で1度だけ生成)
+const TIME_OPTIONS: string[] = (() => {
+  const options: string[] = [];
+  for (let h = 0; h < 24; h++) {
+    for (let m = 0; m < 60; m += 5) {
+      const hrs = String(h).padStart(2, '0');
+      const mins = String(m).padStart(2, '0');
+      options.push(`${hrs}:${mins}`);
     }
-    return options;
-  };
-  const timeOptions = generateTimeOptions();
+  }
+  return options;
+})();
+
+export default function TimeAndRoomSection({ state, setState }: TimeAndRoomSectionProps) {
+  const timeOptions = TIME_OPTIONS;
+
+  const numSlots = calculateNumSlots(
+    state.timeSettings.startTime,
+    state.timeSettings.endTime,
+    state.timeSettings.slotDuration,
+    state.timeSettings.intervalDuration
+  );
+
+  const isTimeOrderInvalid = state.timeSettings.startTime >= state.timeSettings.endTime;
 
   const handleTimeChange = (key: keyof TimeSettings, value: string | number) => {
     let val = value;
     if (key === 'slotDuration') {
       const num = Number(value);
       if (!isNaN(num)) {
-        val = Math.max(0, Math.min(90, num));
+        val = Math.max(1, Math.min(180, num));
       }
     } else if (key === 'intervalDuration') {
       const num = Number(value);
       if (!isNaN(num)) {
-        val = Math.max(0, Math.min(15, num));
+        val = Math.max(0, Math.min(30, num));
       }
     }
     setState(prev => ({
@@ -121,12 +132,48 @@ export default function TimeAndRoomSection({ state, setState }: TimeAndRoomSecti
           <input
             type="number"
             min="0"
-            max="15"
+            max="30"
             className="form-control"
             value={state.timeSettings.intervalDuration}
             onChange={e => handleTimeChange('intervalDuration', e.target.value)}
           />
         </div>
+
+        {isTimeOrderInvalid ? (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem',
+              color: 'var(--color-danger, #ef4444)',
+              fontSize: '0.825rem',
+              marginTop: '0.75rem',
+              padding: '0.5rem 0.75rem',
+              background: 'rgba(239, 68, 68, 0.1)',
+              borderRadius: 'var(--radius-sm)'
+            }}
+          >
+            <AlertCircle size={16} />
+            開始時刻は終了時刻より前に設定してください
+          </div>
+        ) : (
+          <div
+            style={{
+              color: 'var(--text-secondary)',
+              fontSize: '0.85rem',
+              marginTop: '0.75rem',
+              padding: '0.4rem 0.75rem',
+              background: 'rgba(255, 255, 255, 0.04)',
+              borderRadius: 'var(--radius-sm)',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center'
+            }}
+          >
+            <span>計算されるコマ数:</span>
+            <strong style={{ color: 'var(--color-primary, #3b82f6)' }}>{numSlots} コマ</strong>
+          </div>
+        )}
       </div>
 
       {/* 部屋データ */}

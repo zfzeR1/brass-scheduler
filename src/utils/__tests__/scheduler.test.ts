@@ -45,6 +45,11 @@ describe('scheduler utility functions', () => {
       expect(calculateNumSlots('09:00', '09:45', 45, 5)).toBe(1);
       // Interval duration larger than remaining time
       expect(calculateNumSlots('09:00', '10:00', 45, 30)).toBe(1);
+      // Zero duration or cycle
+      expect(calculateNumSlots('09:00', '10:00', 0, 0)).toBe(0);
+      // Invalid time format or NaN
+      expect(calculateNumSlots('invalid', '10:00', 45, 5)).toBe(0);
+      expect(calculateNumSlots('09:00', '10:00', NaN, 5)).toBe(0);
     });
   });
 
@@ -391,6 +396,33 @@ describe('scheduler utility functions', () => {
 
       const hasManualNgViolation = violations.some(v => v.includes('重複NG設定されているパートが同時に'));
       expect(hasManualNgViolation).toBe(true);
+    });
+
+    it('penalizes entries that are not assigned in the schedule (-200,000 pts) with correct message', () => {
+      const unassignedEntry: Entry = {
+        id: 'unassigned-entry',
+        songId: 'song-a',
+        section: 'エンディング',
+        priority: 'high',
+        parts: [{ instrumentId: 'fl', partIndex: 0 }]
+      };
+
+      const { score, violations } = evaluateSchedule(
+        [], // no assignments
+        rooms,
+        STANDARD_INSTRUMENTS,
+        songs,
+        [],
+        [unassignedEntry],
+        1,
+        true
+      );
+
+      expect(score).toBeLessThanOrEqual(-200000);
+      const hasUnassignedViolation = violations.some(v =>
+        v.includes('練習エントリー「曲A - エンディング」がスケジュール内に割り当てられていません（未配置）。')
+      );
+      expect(hasUnassignedViolation).toBe(true);
     });
   });
 

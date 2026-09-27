@@ -16,19 +16,26 @@ export function calculateNumSlots(
   intervalDuration: number
 ): number {
   const parseTimeToMinutes = (timeStr: string): number => {
-    const [hrs, mins] = timeStr.split(':').map(Number);
+    if (!timeStr || typeof timeStr !== 'string' || !timeStr.includes(':')) return NaN;
+    const parts = timeStr.split(':');
+    if (parts.length !== 2) return NaN;
+    const [hrs, mins] = parts.map(Number);
+    if (isNaN(hrs) || isNaN(mins)) return NaN;
     return hrs * 60 + mins;
   };
 
   const startMins = parseTimeToMinutes(startTime);
   const endMins = parseTimeToMinutes(endTime);
+  if (isNaN(startMins) || isNaN(endMins)) return 0;
   const totalMinutes = endMins - startMins;
 
-  if (totalMinutes <= 0) return 0;
+  if (isNaN(totalMinutes) || totalMinutes <= 0) return 0;
 
   const cycle = slotDuration + intervalDuration;
+  if (isNaN(cycle) || cycle <= 0) return 0;
+
   const slots = Math.floor((totalMinutes + intervalDuration) / cycle);
-  return Math.max(0, slots);
+  return Math.max(0, isNaN(slots) ? 0 : slots);
 }
 
 // コマのインデックスから時間帯文字列を取得する
@@ -39,7 +46,11 @@ export function getSlotTimeRange(
   intervalDuration: number
 ): { start: string; end: string } {
   const parseTimeToMinutes = (timeStr: string): number => {
-    const [hrs, mins] = timeStr.split(':').map(Number);
+    if (!timeStr || typeof timeStr !== 'string' || !timeStr.includes(':')) return 0;
+    const parts = timeStr.split(':');
+    if (parts.length !== 2) return 0;
+    const [hrs, mins] = parts.map(Number);
+    if (isNaN(hrs) || isNaN(mins)) return 0;
     return hrs * 60 + mins;
   };
 
@@ -381,7 +392,7 @@ export function evaluateScheduleWithContext(
       score -= 200000;
       if (includeViolations) {
         const song = songs.find(s => s.id === entry.songId);
-        violations.push(`練習エントリー「${song?.name || ''} - ${entry.section}」がスケジュール内に割り当てられています（必須実施）。`);
+        violations.push(`練習エントリー「${song?.name || ''} - ${entry.section}」がスケジュール内に割り当てられていません（未配置）。`);
       }
     }
   }

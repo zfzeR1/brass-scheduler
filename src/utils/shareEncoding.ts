@@ -5,7 +5,8 @@ import type {
   Song,
   DuplicateNGPair,
   Entry,
-  Assignment
+  Assignment,
+  InstrumentMovement
 } from '../types';
 import { STANDARD_INSTRUMENTS } from '../types';
 
@@ -28,12 +29,13 @@ export interface MiniPayload {
   r: Array<{ id: string; n: string; c: number; p?: 1; pi?: string }>;
   s: Array<{ id: string; n: string; p: Record<string, number> }>;
   e: Array<{ id: string; sId: string; s: string; pr: string; p: Array<[string, number]> }>;
-  a: Array<{ s: number; r: string; e?: string; pp?: 1; pt?: Array<{ i: string; pi: number; sId?: string }> }>;
+  a: Array<{ s: number; r: string; e?: string; pp?: 1; pt?: Array<{ i: string; pi: number; sId?: string }>; l?: 1 }>;
   ng: Array<{ id: string; a: [string, string, number]; b: [string, string, number] }>;
+  inst?: Array<{ id: string; n: string; m: InstrumentMovement }>;
 }
 
 export function minifyState(data: ScheduleState): MiniPayload {
-  return {
+  const mini: MiniPayload = {
     t: {
       s: data.timeSettings.startTime,
       e: data.timeSettings.endTime,
@@ -41,10 +43,10 @@ export function minifyState(data: ScheduleState): MiniPayload {
       i: data.timeSettings.intervalDuration
     },
     r: data.rooms.map(r => {
-      const mini: MiniPayload['r'][0] = { id: r.id, n: r.name, c: r.capacity };
-      if (r.isPersonalPracticeCandidate) mini.p = 1;
-      if (r.permanentInstrumentId) mini.pi = r.permanentInstrumentId;
-      return mini;
+      const rm: MiniPayload['r'][0] = { id: r.id, n: r.name, c: r.capacity };
+      if (r.isPersonalPracticeCandidate) rm.p = 1;
+      if (r.permanentInstrumentId) rm.pi = r.permanentInstrumentId;
+      return rm;
     }),
     s: data.songs.map(s => ({ id: s.id, n: s.name, p: s.parts })),
     e: data.entries.map(e => ({
@@ -54,21 +56,22 @@ export function minifyState(data: ScheduleState): MiniPayload {
       pr: e.priority,
       p: e.parts.map(p => [p.instrumentId, p.partIndex] as [string, number])
     })),
-    // 空き部屋の枠は除外してデータ量を削減
+    // 空き部屋かつ未ロック枠は除外してデータ量を削減
     a: data.assignments
-      .filter(a => a.entryId || a.isPersonalPractice)
+      .filter(a => a.entryId || a.isPersonalPractice || a.isLocked)
       .map(a => {
-        const mini: MiniPayload['a'][0] = { s: a.slotIndex, r: a.roomId };
-        if (a.entryId) mini.e = a.entryId;
-        if (a.isPersonalPractice) mini.pp = 1;
-        if (a.parts.length > 0) {
-          mini.pt = a.parts.map(p => {
+        const item: MiniPayload['a'][0] = { s: a.slotIndex, r: a.roomId };
+        if (a.entryId) item.e = a.entryId;
+        if (a.isPersonalPractice) item.pp = 1;
+        if (a.isLocked) item.l = 1;
+        if (a.parts && a.parts.length > 0) {
+          item.pt = a.parts.map(p => {
             const pt: { i: string; pi: number; sId?: string } = { i: p.instrumentId, pi: p.partIndex };
             if (p.songId) pt.sId = p.songId;
             return pt;
           });
         }
-        return mini;
+        return item;
       }),
     ng: data.duplicateNGPairs.map(ng => ({
       id: ng.id,
@@ -76,6 +79,17 @@ export function minifyState(data: ScheduleState): MiniPayload {
       b: [ng.partB.songId, ng.partB.instrumentId, ng.partB.partIndex] as [string, string, number]
     }))
   };
+
+  // 楽器マスタが標準楽器と異なる（カスタム楽器追加などがある）場合に保存
+  if (data.instruments && data.instruments.length > 0) {
+    mini.inst = data.instruments.map(inst => ({
+      id: inst.id,
+      n: inst.name,
+      m: inst.movementType
+    }));
+  }
+
+  return mini;
 }
 
 export function expandPayload(mini: MiniPayload): ScheduleState {
@@ -100,14 +114,14 @@ export function expandPayload(mini: MiniPayload): ScheduleState {
     parts: e.p.map(([instrumentId, partIndex]) => ({ instrumentId, partIndex }))
   }));
 
-  // assignments を復元（ミニ化されたものだけでなく、空き枠も復元する）
+  // assignments を復元
   const assignments: Assignment[] = mini.a.map(a => {
     const asm: Assignment = {
       id: `${a.s}_${a.r}`,
       slotIndex: a.s,
       roomId: a.r,
       isPersonalPractice: !!a.pp,
-      isLocked: false,
+      isLocked: !!a.l,
       parts: a.pt
         ? a.pt.map(p => {
             const pt: { instrumentId: string; partIndex: number; songId?: string } = {
@@ -129,6 +143,11 @@ export function expandPayload(mini: MiniPayload): ScheduleState {
     partB: { songId: ng.b[0], instrumentId: ng.b[1], partIndex: ng.b[2] }
   }));
 
+  // カスタム楽器マスタが存在する場合は復元、未指定時は標準楽器に安全にフォールバック（後方互換性）
+  const instruments = mini.inst
+    ? mini.inst.map(i => ({ id: i.id, name: i.n, movementType: i.m }))
+    : STANDARD_INSTRUMENTS;
+
   return {
     timeSettings: {
       startTime: mini.t.s,
@@ -137,7 +156,7 @@ export function expandPayload(mini: MiniPayload): ScheduleState {
       intervalDuration: mini.t.i
     },
     rooms,
-    instruments: STANDARD_INSTRUMENTS,
+    instruments,
     songs,
     duplicateNGPairs,
     entries,

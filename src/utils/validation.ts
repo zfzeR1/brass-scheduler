@@ -1,4 +1,5 @@
 import type { ScheduleState } from '../types';
+import { calculateNumSlots } from './scheduler';
 
 export interface ValidationResult {
   isValid: boolean;
@@ -11,6 +12,22 @@ export interface ValidationResult {
  * to transition to STEP 2 (Schedule Generation) or STEP 3 (Sharing).
  */
 export function validateMasterDataRequirements(state: ScheduleState): ValidationResult {
+  if (state.timeSettings) {
+    const numSlots = calculateNumSlots(
+      state.timeSettings.startTime,
+      state.timeSettings.endTime,
+      state.timeSettings.slotDuration,
+      state.timeSettings.intervalDuration
+    );
+    if (numSlots <= 0) {
+      return {
+        isValid: false,
+        message: '⚠️ 練習時間の設定が不正です（コマ数が0コマ）。\n「1-1 基本設定」で開始時刻・終了時刻・コマの長さを正しく設定してください。',
+        targetSubTab: 'settings'
+      };
+    }
+  }
+
   if (!state.rooms || state.rooms.length === 0) {
     return {
       isValid: false,

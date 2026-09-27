@@ -33,10 +33,20 @@ describe('validateMasterDataRequirements', () => {
     expect(res.message).toContain('演奏曲が1曲も登録されていません');
   });
 
-  it('fails with entries subtab when entries is empty', () => {
+  it('fails with settings subtab when entries is empty', () => {
     const res = validateMasterDataRequirements({ ...validState, entries: [] });
     expect(res.isValid).toBe(false);
     expect(res.targetSubTab).toBe('entries');
     expect(res.message).toContain('セクション練習」がまだ1件も登録されていません');
+  });
+
+  it('fails with settings subtab when time settings result in 0 slots', () => {
+    const res = validateMasterDataRequirements({
+      ...validState,
+      timeSettings: { startTime: '12:00', endTime: '09:00', slotDuration: 45, intervalDuration: 5 }
+    });
+    expect(res.isValid).toBe(false);
+    expect(res.targetSubTab).toBe('settings');
+    expect(res.message).toContain('練習時間の設定が不正です');
   });
 });

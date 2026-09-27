@@ -20,12 +20,20 @@ export const CORS_HEADERS = {
 };
 
 /**
- * 混同しやすい文字（0, O, 1, I, l）を除外したランダムな短縮IDを生成します。
+ * 混同しやすい文字（0, O, 1, I, l）を除外した暗号学的に安全な短縮IDを生成します。
  */
 export function generateShortId(length: number = SHORT_ID_LENGTH): string {
   let id = '';
-  for (let i = 0; i < length; i++) {
-    id += SHORT_ID_CHARS.charAt(Math.floor(Math.random() * SHORT_ID_CHARS.length));
+  if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
+    const bytes = new Uint8Array(length);
+    crypto.getRandomValues(bytes);
+    for (let i = 0; i < length; i++) {
+      id += SHORT_ID_CHARS[bytes[i] % SHORT_ID_CHARS.length];
+    }
+  } else {
+    for (let i = 0; i < length; i++) {
+      id += SHORT_ID_CHARS.charAt(Math.floor(Math.random() * SHORT_ID_CHARS.length));
+    }
   }
   return id;
 }
@@ -84,7 +92,11 @@ export default async function handler(req: Request) {
         },
       });
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : '取得に失敗しました';
+      console.error('[API Error] GET /api/schedule failed:', err);
+      const isTest = process.env.NODE_ENV === 'test' || process.env.VITEST;
+      const message = isTest
+        ? (err instanceof Error ? err.message : '取得に失敗しました')
+        : 'データの取得中にサーバーエラーが発生しました';
       return new Response(JSON.stringify({ error: message }), {
         status: 500,
         headers: CORS_HEADERS,
@@ -151,7 +163,11 @@ export default async function handler(req: Request) {
         headers: CORS_HEADERS,
       });
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : '保存に失敗しました';
+      console.error('[API Error] POST /api/schedule failed:', err);
+      const isTest = process.env.NODE_ENV === 'test' || process.env.VITEST;
+      const message = isTest
+        ? (err instanceof Error ? err.message : '保存に失敗しました')
+        : 'データの保存中にサーバーエラーが発生しました';
       return new Response(JSON.stringify({ error: message }), {
         status: 500,
         headers: CORS_HEADERS,

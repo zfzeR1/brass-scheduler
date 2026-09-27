@@ -222,4 +222,51 @@ describe('shareEncoding utility', () => {
       expect(decodedFromUrl?.timeSettings.startTime).toBe(sampleState.timeSettings.startTime);
     });
   });
+
+  describe('custom instruments and isLocked preservation (Phase 9 improvements)', () => {
+    it('preserves custom instruments without resetting to STANDARD_INSTRUMENTS', () => {
+      const stateWithCustomInst: ScheduleState = {
+        ...sampleState,
+        instruments: [
+          ...STANDARD_INSTRUMENTS,
+          { id: 'inst-custom-picc', name: 'ピッコロ', movementType: 'movable' },
+          { id: 'inst-custom-organ', name: 'パイプオルガン', movementType: 'immovable' }
+        ]
+      };
+
+      const encoded = encodeScheduleData(stateWithCustomInst);
+      const decoded = decodeScheduleData(encoded);
+
+      expect(decoded).not.toBeNull();
+      expect(decoded?.instruments.length).toBe(STANDARD_INSTRUMENTS.length + 2);
+      expect(decoded?.instruments.some(i => i.id === 'inst-custom-picc' && i.name === 'ピッコロ')).toBe(true);
+      expect(decoded?.instruments.some(i => i.id === 'inst-custom-organ' && i.movementType === 'immovable')).toBe(true);
+    });
+
+    it('preserves isLocked state on assignments through encode/decode', () => {
+      const stateWithLocks: ScheduleState = {
+        ...sampleState,
+        assignments: [
+          {
+            ...sampleState.assignments[0],
+            isLocked: true
+          },
+          {
+            ...sampleState.assignments[1],
+            isLocked: false
+          }
+        ]
+      };
+
+      const encoded = encodeScheduleData(stateWithLocks);
+      const decoded = decodeScheduleData(encoded);
+
+      expect(decoded).not.toBeNull();
+      const lockedAsm = decoded?.assignments.find(a => a.id === sampleState.assignments[0].id);
+      const unlockedAsm = decoded?.assignments.find(a => a.id === sampleState.assignments[1].id);
+
+      expect(lockedAsm?.isLocked).toBe(true);
+      expect(unlockedAsm?.isLocked).toBe(false);
+    });
+  });
 });

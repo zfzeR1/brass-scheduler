@@ -222,5 +222,25 @@ describe('Serverless API: /api/schedule', () => {
       const json = await res.json();
       expect(json.error).toBe('Write quota exceeded');
     });
+
+    it('sanitizes internal errors in production environment', async () => {
+      const origEnv = process.env.NODE_ENV;
+      const origVitest = process.env.VITEST;
+      try {
+        process.env.NODE_ENV = 'production';
+        delete process.env.VITEST;
+
+        mockRedis.get.mockRejectedValue(new Error('Secret redis password exposed at redis://foo:bar@host'));
+        const req = new Request('https://example.com/api/schedule?id=abc123', { method: 'GET' });
+        const res = await handler(req);
+        expect(res.status).toBe(500);
+        const json = await res.json();
+        expect(json.error).toBe('データの取得中にサーバーエラーが発生しました');
+        expect(json.error).not.toContain('Secret redis password');
+      } finally {
+        process.env.NODE_ENV = origEnv;
+        if (origVitest !== undefined) process.env.VITEST = origVitest;
+      }
+    });
   });
 });
