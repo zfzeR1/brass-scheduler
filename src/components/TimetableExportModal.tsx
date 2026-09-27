@@ -22,43 +22,49 @@ export function TimetableExportModal({ isOpen, onClose, state }: TimetableExport
 
   useEffect(() => {
     let isMounted = true;
+    let timerId: ReturnType<typeof setTimeout> | null = null;
+    let rafId: number | null = null;
 
     if (isOpen) {
       setIsGenerating(true);
       setError(null);
       setDataUrl(null);
 
-      // Give browser a tick to ensure the off-screen export view is rendered in DOM
-      const timer = setTimeout(async () => {
-        try {
-          if (!exportViewRef.current) {
-            throw new Error('エクスポート用のDOM要素が見つかりませんでした。');
+      // requestAnimationFrame + 短いディレイでDOM要素のスタイルとフォントが確定してからキャプチャ
+      rafId = requestAnimationFrame(() => {
+        timerId = setTimeout(async () => {
+          try {
+            if (!exportViewRef.current) {
+              throw new Error('エクスポート用のDOM要素が見つかりませんでした。');
+            }
+
+            const filename = formatExportFilename();
+            const url = await generateTimetableDataUrl(exportViewRef.current, {
+              pixelRatio: 2,
+              cacheBust: true,
+              backgroundColor: '#ffffff'
+            });
+
+            if (!isMounted) return;
+            setDataUrl(url);
+            setIsGenerating(false);
+
+            // Trigger automatic browser download
+            downloadDataUrl(url, filename);
+          } catch (err: unknown) {
+            if (!isMounted) return;
+            console.error('Failed to export timetable PNG:', err);
+            const message = err instanceof Error ? err.message : '画像の生成に失敗しました。';
+            setError(message);
+            setIsGenerating(false);
           }
-
-          const filename = formatExportFilename();
-          const url = await generateTimetableDataUrl(exportViewRef.current, {
-            pixelRatio: 2,
-            cacheBust: true,
-            backgroundColor: '#ffffff'
-          });
-
-          if (!isMounted) return;
-          setDataUrl(url);
-          setIsGenerating(false);
-
-          // Trigger automatic browser download
-          downloadDataUrl(url, filename);
-        } catch (err: any) {
-          if (!isMounted) return;
-          console.error('Failed to export timetable PNG:', err);
-          setError(err.message || '画像の生成に失敗しました。');
-          setIsGenerating(false);
-        }
-      }, 200);
+        }, 80);
+      });
 
       return () => {
         isMounted = false;
-        clearTimeout(timer);
+        if (rafId !== null) cancelAnimationFrame(rafId);
+        if (timerId !== null) clearTimeout(timerId);
       };
     } else {
       setDataUrl(null);
@@ -73,9 +79,12 @@ export function TimetableExportModal({ isOpen, onClose, state }: TimetableExport
     downloadDataUrl(dataUrl, filename);
   };
 
+  // モーダルが非表示のときは一切のDOM（オフスクリーンのExportView含む）をレンダリングしない（パフォーマンス最適化）
+  if (!isOpen) return null;
+
   return (
     <>
-      {/* Hidden off-screen rendered export view for capturing */}
+      {/* Hidden off-screen rendered export view for capturing (モーダル表示時のみマウント) */}
       <div
         aria-hidden="true"
         style={{
@@ -91,11 +100,10 @@ export function TimetableExportModal({ isOpen, onClose, state }: TimetableExport
       </div>
 
       {/* Preview / Download Modal */}
-      {isOpen && (
-        <div
-          className="modal-overlay"
-          onClick={onClose}
-          style={{
+      <div
+        className="modal-overlay"
+        onClick={onClose}
+        style={{
             position: 'fixed',
             inset: 0,
             backgroundColor: 'rgba(15, 23, 42, 0.65)',
@@ -298,7 +306,6 @@ export function TimetableExportModal({ isOpen, onClose, state }: TimetableExport
             </div>
           </div>
         </div>
-      )}
     </>
   );
 }
