@@ -6,6 +6,7 @@ import type {
   Entry,
   Assignment
 } from '../types';
+import { packPersonalPracticeRooms } from './personalPracticePacking';
 
 export interface EvaluationContext {
   rooms: Room[];
@@ -219,19 +220,14 @@ export function evaluateScheduleWithContext(
       }
     }
 
-    // C. 個人練習部屋の動的確保およびアサイン（簡易判定＆位置マッピング）
+    // C. 個人練習部屋の動的確保およびアサイン（共通パッキングエンジン利用）
     const idleParts = allPartsList.filter(
       ap => !activePartsInSlot.has(`${ap.songId}_${ap.instrumentId}_${ap.partIndex}`)
     );
 
-    const personalPracticeRooms: Room[] = [];
-    for (const room of rooms) {
-      if (!assignedRoomIds.has(room.id)) {
-        if (room.isPersonalPracticeCandidate || room.permanentInstrumentId) {
-          personalPracticeRooms.push(room);
-        }
-      }
-    }
+    const personalPracticeRooms = rooms.filter(
+      r => !assignedRoomIds.has(r.id) && (r.isPersonalPracticeCandidate || !!r.permanentInstrumentId)
+    );
 
     if (personalPracticeRooms.length === 0 && idleParts.length > 0) {
       score -= 100000;
@@ -239,27 +235,9 @@ export function evaluateScheduleWithContext(
         violations.push(`コマ ${s + 1}: 個人練習を行うための空き部屋が1つも確保できていません。`);
       }
     } else if (idleParts.length > 0) {
-      let currentRoomIdx = 0;
-      let currentRoomRemainingCap = personalPracticeRooms[currentRoomIdx] ? personalPracticeRooms[currentRoomIdx].capacity : 0;
-      let overflowCount = 0;
-
-      for (const part of idleParts) {
-        while (currentRoomIdx < personalPracticeRooms.length && currentRoomRemainingCap <= 0) {
-          currentRoomIdx++;
-          if (currentRoomIdx < personalPracticeRooms.length) {
-            currentRoomRemainingCap = Math.max(0, personalPracticeRooms[currentRoomIdx].capacity);
-          } else {
-            currentRoomRemainingCap = 0;
-          }
-        }
-
-        const key = `${part.songId}_${part.instrumentId}_${part.partIndex}`;
-        if (currentRoomIdx < personalPracticeRooms.length) {
-          slotMap.set(key, personalPracticeRooms[currentRoomIdx].id);
-          currentRoomRemainingCap--;
-        } else {
-          overflowCount++;
-        }
+      const { partToRoomMap, overflowCount } = packPersonalPracticeRooms(personalPracticeRooms, idleParts);
+      for (const [key, roomId] of partToRoomMap.entries()) {
+        slotMap.set(key, roomId);
       }
 
       if (overflowCount > 0) {

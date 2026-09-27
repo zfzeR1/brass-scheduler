@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import type { ScheduleState, Assignment } from '../../types';
 import { getSlotTimeRange, formatPartName } from '../../utils/scheduler';
 import { GripVertical, Edit3, Lock, Unlock, Plus, RotateCcw } from 'lucide-react';
@@ -21,6 +21,18 @@ export default function TimetableGrid({
   onOpenEditModal
 }: TimetableGridProps) {
   const [dragOverCell, setDragOverCell] = useState<string | null>(null);
+
+  // O(1) 高速アクセスのためのルックアップ Map をメモ化
+  const assignmentMap = useMemo(() => {
+    const map = new Map<string, Assignment>();
+    for (const a of state.assignments) {
+      map.set(`${a.slotIndex}_${a.roomId}`, a);
+    }
+    return map;
+  }, [state.assignments]);
+
+  const entryMap = useMemo(() => new Map(state.entries.map(e => [e.id, e])), [state.entries]);
+  const songMap = useMemo(() => new Map(state.songs.map(s => [s.id, s])), [state.songs]);
 
   // --- HTML5 Drag and Drop Handlers ---
   const handleDragStart = (e: React.DragEvent, slotIndex: number, roomId: string) => {
@@ -54,8 +66,8 @@ export default function TimetableGrid({
 
   // --- Cell Rendering ---
   const renderCellContent = (asm: Assignment) => {
-    const entry = state.entries.find(e => e.id === asm.entryId);
-    const song = state.songs.find(s => s.id === entry?.songId);
+    const entry = asm.entryId ? entryMap.get(asm.entryId) : undefined;
+    const song = entry ? songMap.get(entry.songId) : undefined;
 
     if (asm.entryId && entry) {
       return (
@@ -237,8 +249,16 @@ export default function TimetableGrid({
               {/* 各部屋のセル */}
               {state.rooms.map(room => {
                 const key = `${s}_${room.id}`;
-                const asm = state.assignments.find(a => a.slotIndex === s && a.roomId === room.id);
+                const asm = assignmentMap.get(key);
                 const isDragOver = dragOverCell === key;
+                const cellAsm: Assignment = asm || {
+                  id: key,
+                  slotIndex: s,
+                  roomId: room.id,
+                  parts: [],
+                  isLocked: false,
+                  isPersonalPractice: false
+                };
 
                 return (
                   <div
@@ -248,7 +268,7 @@ export default function TimetableGrid({
                     onDragLeave={handleDragLeave}
                     onDrop={e => handleDrop(e, s, room.id)}
                   >
-                    {asm ? renderCellContent(asm) : null}
+                    {renderCellContent(cellAsm)}
                   </div>
                 );
               })}

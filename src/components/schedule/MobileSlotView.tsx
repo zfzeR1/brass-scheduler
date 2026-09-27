@@ -1,4 +1,5 @@
-import type { ScheduleState } from '../../types';
+import { useMemo } from 'react';
+import type { ScheduleState, Assignment } from '../../types';
 import { getSlotTimeRange, formatPartName } from '../../utils/scheduler';
 import { RotateCcw, ArrowLeftRight, X, Lock, Unlock, Edit3 } from 'lucide-react';
 
@@ -27,6 +28,18 @@ export default function MobileSlotView({
   onToggleLock,
   onOpenEditModal
 }: MobileSlotViewProps) {
+  // O(1) 高速アクセスのためのルックアップ Map をメモ化
+  const assignmentMap = useMemo(() => {
+    const map = new Map<string, Assignment>();
+    for (const a of state.assignments) {
+      map.set(`${a.slotIndex}_${a.roomId}`, a);
+    }
+    return map;
+  }, [state.assignments]);
+
+  const entryMap = useMemo(() => new Map(state.entries.map(e => [e.id, e])), [state.entries]);
+  const songMap = useMemo(() => new Map(state.songs.map(s => [s.id, s])), [state.songs]);
+
   const currentSlotTime = getSlotTimeRange(
     mobileSlot,
     state.timeSettings.startTime,
@@ -146,9 +159,10 @@ export default function MobileSlotView({
       {/* 部屋カード一覧（縦並び） */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
         {state.rooms.map(room => {
-          const asm = state.assignments.find(a => a.slotIndex === mobileSlot && a.roomId === room.id);
-          const entry = asm?.entryId ? state.entries.find(e => e.id === asm.entryId) : null;
-          const song = entry ? state.songs.find(sg => sg.id === entry.songId) : null;
+          const key = `${mobileSlot}_${room.id}`;
+          const asm = assignmentMap.get(key);
+          const entry = asm?.entryId ? entryMap.get(asm.entryId) || null : null;
+          const song = entry ? songMap.get(entry.songId) || null : null;
           const isSource = swapSource?.slotIndex === mobileSlot && swapSource?.roomId === room.id;
           const hasAssignment = !!(asm?.entryId || asm?.isPersonalPractice);
 

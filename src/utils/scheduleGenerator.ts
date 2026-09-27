@@ -1,6 +1,5 @@
 import type {
   ScheduleState,
-  Room,
   Assignment
 } from '../types';
 import { calculateNumSlots } from './timeUtils';
@@ -8,6 +7,7 @@ import {
   createEvaluationContext,
   evaluateScheduleWithContext
 } from './scheduleEvaluator';
+import { extractAllPartsList, packPersonalPracticeRooms } from './personalPracticePacking';
 
 /**
  * 焼きなまし法（Simulated Annealing）を用いたスケジュール自動生成エンジン
@@ -193,19 +193,8 @@ export function generateSchedule(
   // 最後に個人練習部屋の動的アサインを適用・明示化して結果を出力
   const finalAssignments = bestAssignments.map(asm => ({ ...asm }));
 
-  // ループ外で全パートリストを一度だけ構築（スロットごとの重複生成を防止）
-  const allPartsList: Array<{ songId: string; instrumentId: string; partIndex: number }> = [];
-  for (const song of songs) {
-    if (!song.parts) continue;
-    for (const instId of Object.keys(song.parts)) {
-      const partCount = song.parts[instId];
-      if (typeof partCount === 'number' && partCount > 0) {
-        for (let idx = 0; idx < partCount; idx++) {
-          allPartsList.push({ songId: song.id, instrumentId: instId, partIndex: idx });
-        }
-      }
-    }
-  }
+  // ループ外で全パートリストを一度だけ構築
+  const allPartsList = extractAllPartsList(songs);
 
   for (let s = 0; s < numSlots; s++) {
     const slotAsms = finalAssignments.filter(asm => asm.slotIndex === s);
@@ -226,49 +215,19 @@ export function generateSchedule(
       ap => !activeParts.some(act => act.songId === ap.songId && act.instrumentId === ap.instrumentId && act.partIndex === ap.partIndex)
     );
 
-    const personalPracticeRooms: Room[] = [];
-    for (const room of rooms) {
+    const personalPracticeRooms = rooms.filter(room => {
       const isAssigned = slotAsms.some(asm => asm.roomId === room.id && asm.entryId);
-      if (!isAssigned) {
-        if (room.isPersonalPracticeCandidate || room.permanentInstrumentId) {
-          personalPracticeRooms.push(room);
-        }
-      }
-    }
+      return !isAssigned && (room.isPersonalPracticeCandidate || !!room.permanentInstrumentId);
+    });
 
-    let currentRoomIdx = 0;
-    let currentRoomRemainingCap = personalPracticeRooms[currentRoomIdx] ? personalPracticeRooms[currentRoomIdx].capacity : 0;
-
-    const practiceRoomParts = new Map<string, typeof idleParts>();
-    for (const r of personalPracticeRooms) {
-      practiceRoomParts.set(r.id, []);
-    }
-
-    for (const part of idleParts) {
-      while (currentRoomIdx < personalPracticeRooms.length && currentRoomRemainingCap <= 0) {
-        currentRoomIdx++;
-        if (currentRoomIdx < personalPracticeRooms.length) {
-          currentRoomRemainingCap = Math.max(0, personalPracticeRooms[currentRoomIdx].capacity);
-        } else {
-          currentRoomRemainingCap = 0;
-        }
-      }
-
-      if (currentRoomIdx < personalPracticeRooms.length) {
-        const roomId = personalPracticeRooms[currentRoomIdx].id;
-        const currentList = practiceRoomParts.get(roomId) || [];
-        currentList.push(part);
-        practiceRoomParts.set(roomId, currentList);
-        currentRoomRemainingCap--;
-      }
-    }
+    const { roomAssignments } = packPersonalPracticeRooms(personalPracticeRooms, idleParts);
 
     for (const asm of slotAsms) {
       if (!asm.entryId) {
-        const isPracticeRoom = personalPracticeRooms.some(r => r.id === asm.roomId);
-        if (isPracticeRoom) {
+        const partsForRoom = roomAssignments.get(asm.roomId);
+        if (partsForRoom !== undefined && personalPracticeRooms.some(r => r.id === asm.roomId)) {
           asm.isPersonalPractice = true;
-          asm.parts = practiceRoomParts.get(asm.roomId) || [];
+          asm.parts = partsForRoom;
         } else {
           asm.isPersonalPractice = false;
           asm.parts = [];

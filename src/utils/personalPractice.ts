@@ -1,4 +1,5 @@
 import type { ScheduleState, Assignment, Room, Song, Instrument, SelectedPart } from '../types';
+import { extractAllPartsList, packPersonalPracticeRooms } from './personalPracticePacking';
 
 export interface UserSlotSchedule {
   slotIndex: number;
@@ -25,10 +26,12 @@ export function getAvailableParts(
   const list: AvailablePartItem[] = [];
   if (!Array.isArray(songs) || !Array.isArray(instruments)) return list;
 
+  const instMap = new Map<string, Instrument>(instruments.map(i => [i.id, i]));
+
   for (const song of songs) {
     if (!song || !song.parts || typeof song.parts !== 'object') continue;
     for (const instId of Object.keys(song.parts)) {
-      const inst = instruments.find(i => i.id === instId);
+      const inst = instMap.get(instId);
       const count = song.parts[instId];
       if (inst && typeof count === 'number' && count > 0) {
         for (let idx = 0; idx < count; idx++) {
@@ -46,7 +49,7 @@ export function getAvailableParts(
 }
 
 /**
- * ユーザーが選択した担当パート群に基づき、各コマにおけるユーザーの練習場所・アサイン・個人練習部屋をシミュレートします。
+ * ユーザーが選択した担当パート群に基づき、各コマにおけるユーザーの練習場所・アサイン・個人練習部屋を取得・シミュレートします。
  */
 export function calculateUserSchedule(
   selectedParts: SelectedPart[] = [],
@@ -62,6 +65,19 @@ export function calculateUserSchedule(
   const rooms = state.rooms || [];
   const assignments = state.assignments || [];
 
+  // ルックアップ Map 事前構築
+  const roomMap = new Map<string, Room>();
+  for (const r of rooms) {
+    if (r && r.id) roomMap.set(r.id, r);
+  }
+  const entryMap = new Map<string, typeof entries[0]>();
+  for (const e of entries) {
+    if (e && e.id) entryMap.set(e.id, e);
+  }
+
+  // ループ不変な全パートリストを一度だけ構築
+  const allPartsList = extractAllPartsList(songs);
+
   const schedule: UserSlotSchedule[] = [];
 
   for (let s = 0; s < numSlots; s++) {
@@ -76,7 +92,7 @@ export function calculateUserSchedule(
       if (!part) continue;
       const found = slotAsms.find(asm => {
         if (!asm || !asm.entryId || asm.isPersonalPractice) return false;
-        const entry = entries.find(e => e && e.id === asm.entryId);
+        const entry = entryMap.get(asm.entryId);
         return (
           entry &&
           entry.songId === part.songId &&
@@ -92,91 +108,72 @@ export function calculateUserSchedule(
       }
     }
 
-    // 2. 合同練習がない場合、個人練習としてどの部屋にアサインされているかをシミュレートする
+    // 2. スケジューラーで既に確定した個人練習部屋を探す（統合最適化）
     if (!assignedAsm) {
-      // 全パートリスト
-      const allPartsList: Array<{ songId: string; instrumentId: string; partIndex: number }> = [];
-      for (const song of songs) {
-        if (!song || !song.parts || typeof song.parts !== 'object') continue;
-        for (const instId of Object.keys(song.parts)) {
-          const partCount = song.parts[instId];
-          if (typeof partCount !== 'number' || partCount <= 0) continue;
-          for (let idx = 0; idx < partCount; idx++) {
-            allPartsList.push({ songId: song.id, instrumentId: instId, partIndex: idx });
-          }
+      for (const part of selectedParts) {
+        if (!part) continue;
+        const explicitPersonal = slotAsms.find(asm => {
+          if (!asm || !asm.isPersonalPractice || !Array.isArray(asm.parts)) return false;
+          return asm.parts.some(p =>
+            p && p.instrumentId === part.instrumentId && p.partIndex === part.partIndex && (!p.songId || p.songId === part.songId)
+          );
+        });
+
+        if (explicitPersonal) {
+          assignedAsm = explicitPersonal;
+          isPersonal = true;
+          activePart = part;
+          break;
         }
       }
+    }
 
-      // コマ s で練習アサインされているパート
-      const activeParts: typeof allPartsList = [];
+    // 3. スケジュール上に確定配置がない場合、共通パッキングエンジンでシミュレートする
+    if (!assignedAsm) {
+      // コマ s で合奏練習アサインされているパート
+      const activePartKeys = new Set<string>();
       for (const asm of slotAsms) {
-        if (asm && asm.entryId) {
-          const entry = entries.find(e => e && e.id === asm.entryId);
+        if (asm && asm.entryId && !asm.isPersonalPractice) {
+          const entry = entryMap.get(asm.entryId);
           if (entry && Array.isArray(entry.parts)) {
             for (const p of entry.parts) {
               if (p) {
-                activeParts.push({ songId: entry.songId, instrumentId: p.instrumentId, partIndex: p.partIndex });
+                activePartKeys.add(`${entry.songId}_${p.instrumentId}_${p.partIndex}`);
               }
             }
           }
         }
       }
 
-      // 余りパート
+      // 未合奏の余りパート
       const idleParts = allPartsList.filter(
-        ap => !activeParts.some(act => act.songId === ap.songId && act.instrumentId === ap.instrumentId && act.partIndex === ap.partIndex)
+        ap => !activePartKeys.has(`${ap.songId}_${ap.instrumentId}_${ap.partIndex}`)
       );
 
       // 個人練習部屋候補
-      const personalPracticeRooms: Room[] = [];
-      for (const room of rooms) {
-        if (!room) continue;
-        const isAssigned = slotAsms.some(asm => asm && asm.roomId === room.id && asm.entryId);
-        if (!isAssigned) {
-          if (room.isPersonalPracticeCandidate || room.permanentInstrumentId) {
-            personalPracticeRooms.push(room);
-          }
-        }
-      }
+      const candidateRooms = rooms.filter(room => {
+        if (!room) return false;
+        const isAssigned = slotAsms.some(asm => asm && asm.roomId === room.id && asm.entryId && !asm.isPersonalPractice);
+        return !isAssigned && (room.isPersonalPracticeCandidate || !!room.permanentInstrumentId);
+      });
 
-      // シミュレーション実行して、自分が選択した最初のパートの行き先を探す
-      let currentRoomIdx = 0;
-      let currentRoomRemainingCap = personalPracticeRooms[currentRoomIdx]
-        ? (personalPracticeRooms[currentRoomIdx].capacity || 0)
-        : 0;
-      let myPracticeRoomId: string | null = null;
+      // 共通パッキングエンジンで配置シミュレーション
+      const { partToRoomMap } = packPersonalPracticeRooms(candidateRooms, idleParts);
 
-      for (const idlePart of idleParts) {
-        while (currentRoomIdx < personalPracticeRooms.length && currentRoomRemainingCap <= 0) {
-          currentRoomIdx++;
-          if (personalPracticeRooms[currentRoomIdx]) {
-            currentRoomRemainingCap = personalPracticeRooms[currentRoomIdx].capacity || 0;
-          }
-        }
-
-        if (currentRoomIdx < personalPracticeRooms.length) {
-          const matchedMyPart = selectedParts.find(
-            sp => sp && sp.songId === idlePart.songId && sp.instrumentId === idlePart.instrumentId && sp.partIndex === idlePart.partIndex
-          );
-
-          if (matchedMyPart) {
-            myPracticeRoomId = personalPracticeRooms[currentRoomIdx].id;
-            activePart = matchedMyPart;
-            break;
-          }
-          currentRoomRemainingCap--;
-        } else {
+      for (const part of selectedParts) {
+        if (!part) continue;
+        const key = `${part.songId}_${part.instrumentId}_${part.partIndex}`;
+        const targetRoomId = partToRoomMap.get(key);
+        if (targetRoomId) {
+          assignedAsm = slotAsms.find(asm => asm && asm.roomId === targetRoomId) || null;
+          isPersonal = true;
+          activePart = part;
           break;
         }
       }
-
-      if (myPracticeRoomId) {
-        assignedAsm = slotAsms.find(asm => asm && asm.roomId === myPracticeRoomId) || null;
-        isPersonal = true;
-      }
     }
 
-    const room = rooms.find(r => r && r.id === assignedAsm?.roomId);
+    const room = assignedAsm ? roomMap.get(assignedAsm.roomId) : undefined;
     schedule.push({
       slotIndex: s,
       assignment: assignedAsm,
