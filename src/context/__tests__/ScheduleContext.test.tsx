@@ -5,6 +5,10 @@ import {
   ScheduleProvider,
   useSchedule,
   useOptionalSchedule,
+  useScheduleState,
+  useScheduleDispatch,
+  useOptionalScheduleState,
+  useOptionalScheduleDispatch,
   createDefaultScheduleState,
   loadInitialScheduleState,
   STORAGE_KEY,
@@ -176,6 +180,72 @@ describe('ScheduleContext and ScheduleProvider', () => {
 
       expect(capturedState).not.toBeNull();
       expect(capturedState!.timeSettings.startTime).toBe('07:00');
+    });
+
+    it('supports separate useScheduleState and useScheduleDispatch hooks', () => {
+      let capturedState: ScheduleState | null = null;
+      let capturedDispatch: any = null;
+
+      function StateConsumer() {
+        capturedState = useScheduleState();
+        return React.createElement('div', null, capturedState.timeSettings.startTime);
+      }
+
+      function DispatchConsumer() {
+        capturedDispatch = useScheduleDispatch();
+        return React.createElement('div', null, 'dispatch-only');
+      }
+
+      function App() {
+        return React.createElement('div', null,
+          React.createElement(StateConsumer),
+          React.createElement(DispatchConsumer)
+        );
+      }
+
+      renderToString(
+        React.createElement(
+          ScheduleProvider,
+          { persistToLocalStorage: false },
+          React.createElement(App)
+        )
+      );
+
+      expect(capturedState).not.toBeNull();
+      expect(capturedState!.timeSettings.startTime).toBe('09:00');
+      expect(capturedDispatch).not.toBeNull();
+      expect(typeof capturedDispatch.setState).toBe('function');
+      expect(typeof capturedDispatch.resetState).toBe('function');
+      expect(capturedDispatch.undoControls).toBeDefined();
+    });
+
+    it('throws when useScheduleState or useScheduleDispatch is called outside Provider', () => {
+      function StateConsumer() {
+        useScheduleState();
+        return null;
+      }
+      function DispatchConsumer() {
+        useScheduleDispatch();
+        return null;
+      }
+
+      expect(() => renderToString(React.createElement(StateConsumer))).toThrow('useScheduleState must be used within a ScheduleProvider');
+      expect(() => renderToString(React.createElement(DispatchConsumer))).toThrow('useScheduleDispatch must be used within a ScheduleProvider');
+    });
+
+    it('returns null when useOptionalScheduleState or useOptionalScheduleDispatch is called outside Provider', () => {
+      let stateResult: any = 'initial';
+      let dispatchResult: any = 'initial';
+
+      function Consumer() {
+        stateResult = useOptionalScheduleState();
+        dispatchResult = useOptionalScheduleDispatch();
+        return null;
+      }
+
+      renderToString(React.createElement(Consumer));
+      expect(stateResult).toBeNull();
+      expect(dispatchResult).toBeNull();
     });
   });
 });
