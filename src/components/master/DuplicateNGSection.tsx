@@ -3,6 +3,7 @@ import type { ScheduleState, DuplicateNGPair, PartReference } from '../../types'
 import { removeNGPairWithCascade } from '../../utils/scheduleIntegrity';
 import { formatPartName } from '../../utils/scheduler';
 import { Plus, Trash2, ChevronRight } from 'lucide-react';
+import PartReferencePicker from '../shared/PartReferencePicker';
 
 export interface DuplicateNGSectionProps {
   state: ScheduleState;
@@ -46,64 +47,13 @@ export default function DuplicateNGSection({ state, setState, onProceedToNext }:
         <form onSubmit={handleAddNGPair} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
           <div className="form-grid-ng">
             {/* Side A */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-              <div className="form-group" style={{ margin: 0 }}>
-                <label className="form-label">曲</label>
-                <select
-                  className="form-control"
-                  value={ngPartA.songId}
-                  onChange={e => setNgPartA({ songId: e.target.value, instrumentId: '', partIndex: 0 })}
-                  required
-                >
-                  <option value="">曲を選択</option>
-                  {state.songs.map(s => (
-                    <option key={s.id} value={s.id}>{s.name}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="form-group" style={{ margin: 0 }}>
-                <label className="form-label">楽器</label>
-                <select
-                  className="form-control"
-                  value={ngPartA.instrumentId}
-                  onChange={e => setNgPartA(prev => ({ ...prev, instrumentId: e.target.value, partIndex: 0 }))}
-                  required
-                  disabled={!ngPartA.songId}
-                >
-                  <option value="">{ngPartA.songId ? '選択' : '曲を先に選択'}</option>
-                  {ngPartA.songId && (() => {
-                    const songA = state.songs.find(s => s.id === ngPartA.songId);
-                    return state.instruments
-                      .filter(i => songA?.parts[i.id] && songA.parts[i.id] > 0)
-                      .map(i => (
-                        <option key={i.id} value={i.id}>{i.name}</option>
-                      ));
-                  })()}
-                </select>
-              </div>
-              <div className="form-group" style={{ margin: 0 }}>
-                <label className="form-label">パート</label>
-                <select
-                  className="form-control"
-                  value={ngPartA.partIndex}
-                  onChange={e => setNgPartA(prev => ({ ...prev, partIndex: Number(e.target.value) }))}
-                  required
-                  disabled={!ngPartA.instrumentId}
-                >
-                  {!ngPartA.instrumentId ? (
-                    <option value="0">楽器を先に選択</option>
-                  ) : (
-                    Array.from({
-                      length: state.songs.find(s => s.id === ngPartA.songId)?.parts[ngPartA.instrumentId] || 0
-                    }).map((_, idx) => (
-                      <option key={idx} value={idx}>
-                        {formatPartName(ngPartA.instrumentId, idx, ngPartA.songId, state.songs, state.instruments)}
-                      </option>
-                    ))
-                  )}
-                </select>
-              </div>
-            </div>
+            <PartReferencePicker
+              songs={state.songs}
+              instruments={state.instruments}
+              value={ngPartA}
+              onChange={setNgPartA}
+              required
+            />
 
             {/* Separator */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', paddingTop: '1.5rem' }}>
@@ -111,64 +61,13 @@ export default function DuplicateNGSection({ state, setState, onProceedToNext }:
             </div>
 
             {/* Side B */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-              <div className="form-group" style={{ margin: 0 }}>
-                <label className="form-label">曲</label>
-                <select
-                  className="form-control"
-                  value={ngPartB.songId}
-                  onChange={e => setNgPartB({ songId: e.target.value, instrumentId: '', partIndex: 0 })}
-                  required
-                >
-                  <option value="">曲を選択</option>
-                  {state.songs.map(s => (
-                    <option key={s.id} value={s.id}>{s.name}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="form-group" style={{ margin: 0 }}>
-                <label className="form-label">楽器</label>
-                <select
-                  className="form-control"
-                  value={ngPartB.instrumentId}
-                  onChange={e => setNgPartB(prev => ({ ...prev, instrumentId: e.target.value, partIndex: 0 }))}
-                  required
-                  disabled={!ngPartB.songId}
-                >
-                  <option value="">{ngPartB.songId ? '選択' : '曲を先に選択'}</option>
-                  {ngPartB.songId && (() => {
-                    const songB = state.songs.find(s => s.id === ngPartB.songId);
-                    return state.instruments
-                      .filter(i => songB?.parts[i.id] && songB.parts[i.id] > 0)
-                      .map(i => (
-                        <option key={i.id} value={i.id}>{i.name}</option>
-                      ));
-                  })()}
-                </select>
-              </div>
-              <div className="form-group" style={{ margin: 0 }}>
-                <label className="form-label">パート</label>
-                <select
-                  className="form-control"
-                  value={ngPartB.partIndex}
-                  onChange={e => setNgPartB(prev => ({ ...prev, partIndex: Number(e.target.value) }))}
-                  required
-                  disabled={!ngPartB.instrumentId}
-                >
-                  {!ngPartB.instrumentId ? (
-                    <option value="0">楽器を先に選択</option>
-                  ) : (
-                    Array.from({
-                      length: state.songs.find(s => s.id === ngPartB.songId)?.parts[ngPartB.instrumentId] || 0
-                    }).map((_, idx) => (
-                      <option key={idx} value={idx}>
-                        {formatPartName(ngPartB.instrumentId, idx, ngPartB.songId, state.songs, state.instruments)}
-                      </option>
-                    ))
-                  )}
-                </select>
-              </div>
-            </div>
+            <PartReferencePicker
+              songs={state.songs}
+              instruments={state.instruments}
+              value={ngPartB}
+              onChange={setNgPartB}
+              required
+            />
           </div>
 
           <button type="submit" className="btn btn-primary" style={{ alignSelf: 'flex-start' }}>
