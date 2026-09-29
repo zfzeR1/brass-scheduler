@@ -101,7 +101,8 @@ export function generateSchedule(
 
   const assignableEntries = [...entries];
 
-  while (temp > finalTemp) {
+  if (assignableEntries.length > 0) {
+    while (temp > finalTemp) {
     for (let iter = 0; iter < iterationsPerTemp; iter++) {
       const targetAsm = mutableAsms[Math.floor(Math.random() * mutableAsms.length)];
       const action = Math.floor(Math.random() * 3);
@@ -189,6 +190,7 @@ export function generateSchedule(
     }
     temp *= alpha;
   }
+}
 
   // 最後に個人練習部屋の動的アサインを適用・明示化して結果を出力
   const finalAssignments = bestAssignments.map(asm => ({ ...asm }));

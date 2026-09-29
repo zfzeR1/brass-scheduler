@@ -24,6 +24,7 @@ function MainAppContent() {
 
   // OSのテーマ設定（ダーク/ライト）に自動追従
   useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
     const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
     const applyTheme = (e: MediaQueryList | MediaQueryListEvent) => {
       if (e.matches) {
