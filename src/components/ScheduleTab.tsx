@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import type { ScheduleState, Assignment } from '../types';
+import type { ScheduleState } from '../types';
 import {
   calculateNumSlots,
   generateScheduleAsync,
@@ -14,6 +14,7 @@ import CellEditModal from './schedule/CellEditModal';
 import TimetableGrid from './schedule/TimetableGrid';
 import MobileSlotView from './schedule/MobileSlotView';
 import { useOptionalSchedule } from '../context/ScheduleContext';
+import { useAssignmentActions } from '../hooks/useAssignmentActions';
 
 export interface ScheduleTabProps {
   state?: ScheduleState;
@@ -51,6 +52,7 @@ export default function ScheduleTab(props: ScheduleTabProps) {
   const [editTarget, setEditTarget] = useState<{ slotIndex: number; roomId: string } | null>(null);
   const [showExportModal, setShowExportModal] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [generationError, setGenerationError] = useState<string | null>(null);
 
   const numSlots = useMemo(() => {
     return calculateNumSlots(
@@ -79,162 +81,25 @@ export default function ScheduleTab(props: ScheduleTabProps) {
   const handleAutoGenerate = async (startSlot: number = 0) => {
     if (isGenerating) return;
     setIsGenerating(true);
+    setGenerationError(null);
     try {
       const updatedAssignments = await generateScheduleAsync(state, startSlot);
       setAssignmentsWithHistory(updatedAssignments);
+    } catch (err) {
+      console.error('Schedule generation failed:', err);
+      setGenerationError('スケジュール生成に失敗しました。条件を確認してください。');
     } finally {
       setIsGenerating(false);
     }
   };
 
-  // ロックの切り替え
-  const toggleLock = (slotIndex: number, roomId: string) => {
-    setAssignmentsWithHistory(prev => {
-      const updated = prev.map(asm => {
-        if (asm.slotIndex === slotIndex && asm.roomId === roomId) {
-          return { ...asm, isLocked: !asm.isLocked };
-        }
-        return asm;
-      });
-      return updated;
-    });
-  };
-
-  // 2つの枠の割り当てを交換する（ドラッグ＆ドロップおよびタップ入れ替え共通）
-  const handleSwapAssignments = (srcSlotIndex: number, srcRoomId: string, destSlotIndex: number, destRoomId: string) => {
-    if (srcSlotIndex === destSlotIndex && srcRoomId === destRoomId) return;
-
-    setAssignmentsWithHistory(prev => {
-      const updated = [...prev];
-      let srcIdx = updated.findIndex(
-        asm => asm.slotIndex === srcSlotIndex && asm.roomId === srcRoomId
-      );
-      let destIdx = updated.findIndex(
-        asm => asm.slotIndex === destSlotIndex && asm.roomId === destRoomId
-      );
-
-      if (srcIdx === -1) {
-        updated.push({
-          id: `${srcSlotIndex}_${srcRoomId}`,
-          slotIndex: srcSlotIndex,
-          roomId: srcRoomId,
-          entryId: undefined,
-          parts: [],
-          isLocked: false,
-          isPersonalPractice: false
-        });
-        srcIdx = updated.length - 1;
-      }
-      if (destIdx === -1) {
-        updated.push({
-          id: `${destSlotIndex}_${destRoomId}`,
-          slotIndex: destSlotIndex,
-          roomId: destRoomId,
-          entryId: undefined,
-          parts: [],
-          isLocked: false,
-          isPersonalPractice: false
-        });
-        destIdx = updated.length - 1;
-      }
-
-      const srcAsm = { ...updated[srcIdx] };
-      const destAsm = { ...updated[destIdx] };
-
-      // アサインデータのみを入れ替える (slotIndex や roomId はそのまま)
-      updated[srcIdx] = {
-        ...srcAsm,
-        entryId: destAsm.entryId,
-        parts: destAsm.parts,
-        isPersonalPractice: destAsm.isPersonalPractice
-      };
-
-      updated[destIdx] = {
-        ...destAsm,
-        entryId: srcAsm.entryId,
-        parts: srcAsm.parts,
-        isPersonalPractice: srcAsm.isPersonalPractice
-      };
-
-      return updated;
-    });
-  };
-
-  // 枠に特定の練習エントリーを直接割り当てる
-  const handleAssignEntry = (slotIndex: number, roomId: string, entryId: string) => {
-    const entry = state.entries.find(e => e.id === entryId);
-    if (!entry) return;
-    setAssignmentsWithHistory(prev => {
-      const updated = [...prev];
-      const idx = updated.findIndex(a => a.slotIndex === slotIndex && a.roomId === roomId);
-      const newAsm: Assignment = {
-        id: `${slotIndex}_${roomId}`,
-        slotIndex,
-        roomId,
-        entryId: entry.id,
-        isPersonalPractice: false,
-        isLocked: idx !== -1 ? updated[idx].isLocked : false,
-        parts: entry.parts.map(p => ({
-          songId: entry.songId,
-          instrumentId: p.instrumentId,
-          partIndex: p.partIndex
-        }))
-      };
-      if (idx !== -1) {
-        updated[idx] = newAsm;
-      } else {
-        updated.push(newAsm);
-      }
-      return updated;
-    });
-  };
-
-  // 枠を個人練習部屋に設定する
-  const handleSetPersonalPractice = (slotIndex: number, roomId: string) => {
-    setAssignmentsWithHistory(prev => {
-      const updated = [...prev];
-      const idx = updated.findIndex(a => a.slotIndex === slotIndex && a.roomId === roomId);
-      const newAsm: Assignment = {
-        id: `${slotIndex}_${roomId}`,
-        slotIndex,
-        roomId,
-        entryId: undefined,
-        isPersonalPractice: true,
-        isLocked: idx !== -1 ? updated[idx].isLocked : false,
-        parts: []
-      };
-      if (idx !== -1) {
-        updated[idx] = newAsm;
-      } else {
-        updated.push(newAsm);
-      }
-      return updated;
-    });
-  };
-
-  // 枠を空き部屋にする
-  const handleSetEmpty = (slotIndex: number, roomId: string) => {
-    setAssignmentsWithHistory(prev => {
-      const updated = [...prev];
-      const idx = updated.findIndex(a => a.slotIndex === slotIndex && a.roomId === roomId);
-      const newAsm: Assignment = {
-        id: `${slotIndex}_${roomId}`,
-        slotIndex,
-        roomId,
-        entryId: undefined,
-        isPersonalPractice: false,
-        isLocked: false,
-        parts: []
-      };
-      if (idx !== -1) {
-        updated[idx] = newAsm;
-      } else {
-        updated.push(newAsm);
-      }
-      return updated;
-    });
-  };
-
+  const {
+    toggleLock,
+    handleSwapAssignments,
+    handleAssignEntry,
+    handleSetPersonalPractice,
+    handleSetEmpty
+  } = useAssignmentActions(state, setAssignmentsWithHistory);
   return (
     <div>
       <div style={{ marginBottom: '1.5rem' }}>
@@ -314,6 +179,12 @@ export default function ScheduleTab(props: ScheduleTabProps) {
           </span>
         </div>
       </div>
+
+      {generationError && (
+        <div className="glass-card" style={{ marginBottom: '1rem', padding: '0.85rem 1.1rem', borderLeft: '4px solid var(--danger)', background: 'rgba(239, 68, 68, 0.08)', fontSize: '0.85rem', color: 'var(--danger)' }}>
+          ⚠️ {generationError}
+        </div>
+      )}
 
       {/* 制約チェック結果（警告/エラー表示） */}
       {state.assignments.length > 0 && (

@@ -1,5 +1,5 @@
-import { forwardRef } from 'react';
-import type { ScheduleState } from '../types';
+import { forwardRef, useMemo } from 'react';
+import type { ScheduleState, Assignment } from '../types';
 import { calculateNumSlots, getSlotTimeRange, formatPartName } from '../utils/scheduler';
 import { calculateExportDimensions, formatExportDate, formatScheduleMeta } from '../utils/timetableExport';
 
@@ -29,6 +29,18 @@ export const TimetableExportView = forwardRef<HTMLDivElement, TimetableExportVie
     const { width } = calculateExportDimensions(rooms.length);
     const meta = formatScheduleMeta(state);
     const formattedDate = formatExportDate(date);
+
+    const assignmentMap = useMemo(() => {
+      const map = new Map<string, Assignment>();
+      for (const a of assignments) {
+        map.set(`${a.slotIndex}_${a.roomId}`, a);
+      }
+      return map;
+    }, [assignments]);
+
+    const entryMap = useMemo(() => new Map(entries.map(e => [e.id, e])), [entries]);
+    const songMap = useMemo(() => new Map(songs.map(s => [s.id, s])), [songs]);
+    const instrumentMap = useMemo(() => new Map(instruments.map(i => [i.id, i])), [instruments]);
 
     return (
       <div
@@ -179,7 +191,7 @@ export const TimetableExportView = forwardRef<HTMLDivElement, TimetableExportVie
             {/* Room Column Headers */}
             {rooms.map((room, idx) => {
               const permInst = room.permanentInstrumentId
-                ? instruments.find(i => i.id === room.permanentInstrumentId)
+                ? instrumentMap.get(room.permanentInstrumentId)
                 : null;
               return (
                 <div
@@ -290,11 +302,9 @@ export const TimetableExportView = forwardRef<HTMLDivElement, TimetableExportVie
 
                 {/* Room Assignment Cells */}
                 {rooms.map((room, roomIdx) => {
-                  const asm = assignments.find(
-                    a => a.slotIndex === slotIndex && a.roomId === room.id
-                  );
-                  const entry = asm?.entryId ? entries.find(e => e.id === asm.entryId) : null;
-                  const song = entry ? songs.find(s => s.id === entry.songId) : null;
+                  const asm = assignmentMap.get(`${slotIndex}_${room.id}`);
+                  const entry = asm?.entryId ? entryMap.get(asm.entryId) : null;
+                  const song = entry ? songMap.get(entry.songId) : null;
 
                   return (
                     <div

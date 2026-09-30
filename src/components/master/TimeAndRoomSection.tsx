@@ -1,7 +1,7 @@
 import React from 'react';
 import type { ScheduleState, TimeSettings, Room } from '../../types';
 import { removeRoomWithCascade } from '../../utils/scheduleIntegrity';
-import { calculateNumSlots } from '../../utils/scheduler';
+import { calculateNumSlots, parseTimeToMinutes } from '../../utils/scheduler';
 import { AlertCircle, Clock, MapPin, Plus, Trash2 } from 'lucide-react';
 
 export interface TimeAndRoomSectionProps {
@@ -32,7 +32,7 @@ export default function TimeAndRoomSection({ state, setState }: TimeAndRoomSecti
     state.timeSettings.intervalDuration
   );
 
-  const isTimeOrderInvalid = state.timeSettings.startTime >= state.timeSettings.endTime;
+  const isTimeOrderInvalid = parseTimeToMinutes(state.timeSettings.startTime) >= parseTimeToMinutes(state.timeSettings.endTime);
 
   const handleTimeChange = (key: keyof TimeSettings, value: string | number) => {
     let val = value;
@@ -116,6 +116,13 @@ export default function TimeAndRoomSection({ state, setState }: TimeAndRoomSecti
             ))}
           </select>
         </div>
+
+        {parseTimeToMinutes(state.timeSettings.startTime) >= parseTimeToMinutes(state.timeSettings.endTime) && (
+          <div style={{ marginTop: '0.5rem', padding: '0.5rem 0.75rem', borderRadius: '6px', background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)', fontSize: '0.82rem', color: '#dc2626' }}>
+            ⚠️ 開始時刻は終了時刻より前に設定してください。
+          </div>
+        )}
+
         <div className="form-group">
           <label className="form-label">1コマの長さ (分)</label>
           <input

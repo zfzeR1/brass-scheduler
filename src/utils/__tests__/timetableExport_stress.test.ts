@@ -10,6 +10,14 @@ import {
 } from '../timetableExport';
 import type { ScheduleState, Song, Room, Entry } from '../../types';
 
+vi.mock('react', async (importOriginal) => {
+  const actual: any = await importOriginal();
+  return {
+    ...actual,
+    useMemo: (cb: any) => cb()
+  };
+});
+
 describe('Adversarial Stress Test: R2 Timetable Export & Dimensions', () => {
   describe('Dimension Math with Extreme Room Counts', () => {
     it('handles 0 rooms with minimum 1000px width', () => {

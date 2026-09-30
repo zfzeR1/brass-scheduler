@@ -167,7 +167,7 @@ export default function TimetableGrid({
           </div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '2px', marginTop: '0.25rem', maxHeight: '35px', overflowY: 'auto' }}>
             {asm.parts.map((p, idx) => {
-              const pSong = state.songs.find(sg => sg.id === p.songId);
+              const pSong = p.songId ? songMap.get(p.songId) : undefined;
               return (
                 <span
                   key={idx}
