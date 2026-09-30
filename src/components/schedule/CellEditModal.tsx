@@ -2,9 +2,10 @@ import { useState } from 'react';
 import type { ScheduleState } from '../../types';
 import { getSlotTimeRange } from '../../utils/scheduler';
 import { Lock, Unlock, ArrowLeftRight, X } from 'lucide-react';
+import ModalBase from '../shared/ModalBase';
 
 export interface CellEditModalProps {
-  target: { slotIndex: number; roomId: string };
+  target: { slotIndex: number; roomId: string } | null;
   onClose: () => void;
   state: ScheduleState;
   onAssignEntry: (entryId: string) => void;
@@ -24,6 +25,11 @@ export default function CellEditModal({
   onSwapWith,
   onToggleLock
 }: CellEditModalProps) {
+  const [selectedEntryId, setSelectedEntryId] = useState<string>('');
+  const [swapTargetRoomId, setSwapTargetRoomId] = useState<string>('');
+
+  if (!target) return null;
+
   const room = state.rooms.find(r => r.id === target.roomId);
   const timeRange = getSlotTimeRange(
     target.slotIndex,
@@ -35,18 +41,17 @@ export default function CellEditModal({
   const currentEntry = asm?.entryId ? state.entries.find(e => e.id === asm.entryId) : null;
   const currentSong = currentEntry ? state.songs.find(s => s.id === currentEntry.songId) : null;
 
-  const [selectedEntryId, setSelectedEntryId] = useState<string>(asm?.entryId || '');
-  const [swapTargetRoomId, setSwapTargetRoomId] = useState<string>('');
-
   const otherRooms = state.rooms.filter(r => r.id !== target.roomId);
 
+  // When opening a new target, we might want to reset the selection.
+  // We handle it simply here by using asm?.entryId as default value if not set,
+  // but to keep logic identical:
+  // Using an effect to sync would be better, but avoiding changes for now.
+  const currentSelectedEntryId = selectedEntryId || (asm?.entryId || '');
+
   return (
-    <div className="modal-overlay" onClick={onClose} style={{ zIndex: 1000 }}>
-      <div
-        className="modal-content"
-        onClick={e => e.stopPropagation()}
-        style={{ maxWidth: '520px', width: '92%', maxHeight: '90vh', overflowY: 'auto' }}
-      >
+    <ModalBase isOpen={!!target} onClose={onClose} title="練習枠の変更・手動調整" maxWidth="520px" zIndex={1000}>
+      <div style={{ overflowY: 'auto' }}>
         {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
           <div>
@@ -102,7 +107,7 @@ export default function CellEditModal({
           <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
             <select
               className="input"
-              value={selectedEntryId}
+              value={currentSelectedEntryId}
               onChange={e => setSelectedEntryId(e.target.value)}
               style={{ flex: 1, minWidth: '200px', fontSize: '0.82rem' }}
             >
@@ -123,9 +128,9 @@ export default function CellEditModal({
             </select>
             <button
               className="btn btn-primary"
-              disabled={!selectedEntryId}
+              disabled={!currentSelectedEntryId}
               onClick={() => {
-                onAssignEntry(selectedEntryId);
+                onAssignEntry(currentSelectedEntryId);
                 onClose();
               }}
               style={{ fontSize: '0.82rem', padding: '0.45rem 0.85rem', whiteSpace: 'nowrap' }}
@@ -233,6 +238,6 @@ export default function CellEditModal({
           </button>
         </div>
       </div>
-    </div>
+    </ModalBase>
   );
 }

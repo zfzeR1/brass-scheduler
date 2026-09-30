@@ -3,6 +3,7 @@ import type { Song, Instrument } from '../../../types';
 import InstrumentPartPicker from './InstrumentPartPicker';
 import AddExtraInstrumentModal from './AddExtraInstrumentModal';
 import { X, Save } from 'lucide-react';
+import ModalBase from '../../shared/ModalBase';
 
 export interface SongEditModalProps {
   song: Song | null;
@@ -55,8 +56,6 @@ export default function SongEditModal({
     }
   }, [song, isOpen, instruments]);
 
-  if (!isOpen || !song) return null;
-
   const handlePartCountChange = (instId: string, count: number) => {
     setEditParts(prev => ({
       ...prev,
@@ -85,6 +84,7 @@ export default function SongEditModal({
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!song) return;
     const trimmedName = songName.trim();
     if (!trimmedName) return;
 
@@ -111,85 +111,85 @@ export default function SongEditModal({
   ];
 
   return (
-    <div className="modal-overlay" onClick={onClose} style={{ zIndex: 1000 }}>
-      <div
-        className="modal-content"
-        onClick={e => e.stopPropagation()}
-        style={{ maxWidth: '520px', width: '92%', maxHeight: '90vh', overflowY: 'auto' }}
-      >
-        {/* ヘッダー */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
-          <div>
-            <h2 style={{ fontSize: '1.15rem', fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>
-              曲データの編集
-            </h2>
-            <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginTop: '0.2rem' }}>
-              ID: {song.id}
+    <>
+      <ModalBase isOpen={isOpen} onClose={onClose} title="曲の編集" maxWidth="520px" zIndex={1000}>
+        {song && (
+          <div style={{ overflowY: 'auto' }}>
+            {/* ヘッダー */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
+              <div>
+                <h2 style={{ fontSize: '1.15rem', fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>
+                  曲データの編集
+                </h2>
+                <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginTop: '0.2rem' }}>
+                  ID: {song.id}
+                </div>
+              </div>
+              <button
+                type="button"
+                className="btn btn-secondary btn-icon"
+                onClick={onClose}
+                aria-label="閉じる"
+              >
+                <X size={18} />
+              </button>
             </div>
-          </div>
-          <button
-            type="button"
-            className="btn btn-secondary btn-icon"
-            onClick={onClose}
-            aria-label="閉じる"
-          >
-            <X size={18} />
-          </button>
-        </div>
 
-        {/* 編集フォーム */}
-        <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          <div className="form-group" style={{ margin: 0 }}>
-            <label className="form-label" style={{ fontSize: '0.85rem' }}>曲名</label>
-            <input
-              type="text"
-              className="form-control"
-              value={songName}
-              onChange={e => setSongName(e.target.value)}
-              placeholder="曲名"
-              required
-            />
-          </div>
+            {/* 編集フォーム */}
+            <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <div className="form-group" style={{ margin: 0 }}>
+                <label className="form-label" style={{ fontSize: '0.85rem' }}>曲名</label>
+                <input
+                  type="text"
+                  className="form-control"
+                  value={songName}
+                  onChange={e => setSongName(e.target.value)}
+                  placeholder="曲名"
+                  required
+                />
+              </div>
 
-          <div className="form-group" style={{ margin: 0 }}>
-            <label className="form-label" style={{ fontSize: '0.85rem' }}>パート編成</label>
-            <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: '0 0 0.5rem 0' }}>
-              各楽器のパート数を指定してください（「-」に設定すると除外されます）。
-            </p>
+              <div className="form-group" style={{ margin: 0 }}>
+                <label className="form-label" style={{ fontSize: '0.85rem' }}>パート編成</label>
+                <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: '0 0 0.5rem 0' }}>
+                  各楽器のパート数を指定してください（「-」に設定すると除外されます）。
+                </p>
 
-            <InstrumentPartPicker
-              instruments={instruments}
-              extraInstruments={editExtraInsts}
-              parts={editParts}
-              onChangePartCount={handlePartCountChange}
-              onRemoveExtraInstrument={handleRemoveExtraInstrument}
-              onOpenAddExtraInstrument={() => setIsAddModalOpen(true)}
-              maxHeight="260px"
-              isCompact={true}
-            />
-          </div>
+                <InstrumentPartPicker
+                  instruments={instruments}
+                  extraInstruments={editExtraInsts}
+                  parts={editParts}
+                  onChangePartCount={handlePartCountChange}
+                  onRemoveExtraInstrument={handleRemoveExtraInstrument}
+                  onOpenAddExtraInstrument={() => setIsAddModalOpen(true)}
+                  maxHeight="260px"
+                  isCompact={true}
+                />
+              </div>
 
-          {/* フッターアクション */}
-          <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.5rem', paddingTop: '1rem', borderTop: '1px solid var(--border-color)' }}>
-            <button
-              type="button"
-              className="btn btn-secondary"
-              onClick={onClose}
-              style={{ flex: 1, padding: '0.6rem' }}
-            >
-              キャンセル
-            </button>
-            <button
-              type="submit"
-              className="btn btn-primary"
-              disabled={!songName.trim()}
-              style={{ flex: 1, padding: '0.6rem', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem' }}
-            >
-              <Save size={16} /> 変更を保存する
-            </button>
+              {/* フッターアクション */}
+              <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.5rem', paddingTop: '1rem', borderTop: '1px solid var(--border-color)' }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={onClose}
+                  style={{ flex: 1, padding: '0.6rem' }}
+                >
+                  キャンセル
+                </button>
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  disabled={!songName.trim()}
+                  style={{ flex: 1, padding: '0.6rem', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem' }}
+                >
+                  <Save size={16} /> 変更を保存する
+                </button>
+              </div>
+            </form>
           </div>
-        </form>
-      </div>
+        )}
+      </ModalBase>
 
       <AddExtraInstrumentModal
         isOpen={isAddModalOpen}
@@ -197,6 +197,6 @@ export default function SongEditModal({
         onAdd={handleAddExtraInstrument}
         existingNames={allKnownNames}
       />
-    </div>
+    </>
   );
 }

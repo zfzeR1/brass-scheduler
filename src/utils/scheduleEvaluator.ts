@@ -9,6 +9,14 @@ import type {
 } from '../types';
 import { packPersonalPracticeRooms } from './personalPracticePacking';
 
+interface ActivePartInfo {
+  key: string;
+  songId: string;
+  instrumentId: string;
+  partIndex: number;
+  roomId: string;
+}
+
 export interface EvaluationContext {
   rooms: Room[];
   instruments: Instrument[];
@@ -21,14 +29,12 @@ export interface EvaluationContext {
   roomMap: Map<string, Room>;
   ngSet: Set<string>;
   allPartsList: Array<{ songId: string; instrumentId: string; partIndex: number }>;
-}
-
-interface ActivePartInfo {
-  key: string;
-  songId: string;
-  instrumentId: string;
-  partIndex: number;
-  roomId: string;
+  _slotsAssignments: Assignment[][];
+  _entryUsageCount: Map<string, number>;
+  _partRoomsBySlot: Map<string, string>[];
+  _assignedRoomIds: Set<string>;
+  _activePartsInSlot: Set<string>;
+  _activePartsInfo: ActivePartInfo[];
 }
 
 /**
@@ -82,7 +88,13 @@ export function createEvaluationContext(
     entryMap,
     roomMap,
     ngSet,
-    allPartsList
+    allPartsList,
+    _slotsAssignments: Array.from({ length: numSlots }, () => [] as Assignment[]),
+    _entryUsageCount: new Map<string, number>(),
+    _partRoomsBySlot: Array.from({ length: numSlots }, () => new Map<string, string>()),
+    _assignedRoomIds: new Set<string>(),
+    _activePartsInSlot: new Set<string>(),
+    _activePartsInfo: [] as ActivePartInfo[]
   };
 }
 
@@ -109,8 +121,16 @@ export function evaluateScheduleWithContext(
     allPartsList
   } = context;
 
+  // バッファのクリアと再利用
+  for (const arr of context._slotsAssignments) arr.length = 0;
+  context._entryUsageCount.clear();
+  for (const map of context._partRoomsBySlot) map.clear();
+
+  const slotsAssignments = context._slotsAssignments;
+  const entryUsageCount = context._entryUsageCount;
+  const partRoomsBySlot = context._partRoomsBySlot;
+
   // コマごとに整理
-  const slotsAssignments: Assignment[][] = Array.from({ length: numSlots }, () => []);
   for (const asm of assignments) {
     if (asm.slotIndex < numSlots) {
       slotsAssignments[asm.slotIndex].push(asm);
@@ -118,7 +138,6 @@ export function evaluateScheduleWithContext(
   }
 
   // 2. 全体制約（エントリー重複チェック）
-  const entryUsageCount = new Map<string, number>();
   for (const asm of assignments) {
     if (asm.entryId && !asm.isPersonalPractice) {
       entryUsageCount.set(asm.entryId, (entryUsageCount.get(asm.entryId) || 0) + 1);
@@ -138,15 +157,17 @@ export function evaluateScheduleWithContext(
     }
   }
 
-  // コマごとの位置情報マップ（移動コスト計算用）
-  const partRoomsBySlot: Array<Map<string, string>> = Array.from({ length: numSlots }, () => new Map());
-
   // 3. 各コマの制約検証
   for (let s = 0; s < numSlots; s++) {
     const currentSlotAsms = slotsAssignments[s];
-    const assignedRoomIds = new Set<string>();
-    const activePartsInSlot = new Set<string>();
-    const activePartsInfo: ActivePartInfo[] = [];
+    
+    context._assignedRoomIds.clear();
+    context._activePartsInSlot.clear();
+    context._activePartsInfo.length = 0;
+    
+    const assignedRoomIds = context._assignedRoomIds;
+    const activePartsInSlot = context._activePartsInSlot;
+    const activePartsInfo = context._activePartsInfo;
     const slotMap = partRoomsBySlot[s];
 
     // A. 部屋ごとの制約検証（キャパシティ、移動不可楽器）
