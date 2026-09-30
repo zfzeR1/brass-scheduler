@@ -1,7 +1,8 @@
 import { useMemo } from 'react';
 import type { ScheduleState, Assignment } from '../../types';
-import { getSlotTimeRange, formatPartName } from '../../utils/scheduler';
+import { getSlotTimeRange } from '../../utils/scheduler';
 import { RotateCcw, ArrowLeftRight, X, Lock, Unlock, Edit3 } from 'lucide-react';
+import AssignmentCellContent from './AssignmentCellContent';
 
 interface MobileSlotViewProps {
   state: ScheduleState;
@@ -203,50 +204,14 @@ export default function MobileSlotView({
               </div>
 
               {/* 内容 */}
-              {asm?.entryId && entry ? (
-                <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.35rem' }}>
-                    <span className="badge badge-primary" style={{ fontSize: '0.7rem' }}>{song?.name || '曲名なし'}</span>
-                  </div>
-                  <div style={{ fontSize: '0.88rem', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '0.35rem' }}>
-                    {entry.section}
-                  </div>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.25rem' }}>
-                    {entry.parts.map(p => (
-                      <span
-                        key={`${p.instrumentId}_${p.partIndex}`}
-                        style={{ fontSize: '0.7rem', background: 'rgba(255,255,255,0.05)', padding: '2px 5px', borderRadius: '3px', border: '1px solid var(--border-color)' }}
-                      >
-                        {formatPartName(p.instrumentId, p.partIndex, entry.songId, state.songs, state.instruments)}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              ) : asm?.isPersonalPractice ? (
-                <div>
-                  <span className="badge badge-info" style={{ fontSize: '0.7rem', marginBottom: '0.35rem' }}>個人練習部屋</span>
-                  <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>
-                    退避中: {asm.parts.length} パート
-                  </div>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.25rem', marginTop: '0.25rem' }}>
-                    {asm.parts.map((p, idx) => {
-                      const pSong = state.songs.find(sg => sg.id === p.songId);
-                      return (
-                        <span
-                          key={idx}
-                          style={{ fontSize: '0.68rem', background: 'rgba(6,182,212,0.1)', padding: '2px 4px', borderRadius: '3px', color: '#22d3ee' }}
-                        >
-                          {pSong ? `${pSong.name.substring(0, 3)}:` : ''}{formatPartName(p.instrumentId, p.partIndex, p.songId, state.songs, state.instruments)}
-                        </span>
-                      );
-                    })}
-                  </div>
-                </div>
-              ) : (
-                <div style={{ color: 'var(--text-muted)', fontSize: '0.82rem', fontStyle: 'italic' }}>
-                  空き部屋
-                </div>
-              )}
+              <AssignmentCellContent
+                assignment={asm}
+                entry={entry}
+                song={song}
+                songs={state.songs}
+                instruments={state.instruments}
+                compact={true}
+              />
 
               {/* アクションボタン (入替・変更) */}
               <div style={{ marginTop: '0.75rem', paddingTop: '0.5rem', borderTop: '1px solid var(--border-color)' }}>

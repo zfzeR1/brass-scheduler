@@ -1,7 +1,8 @@
 import React, { useState, useMemo } from 'react';
 import type { ScheduleState, Assignment } from '../../types';
-import { getSlotTimeRange, formatPartName } from '../../utils/scheduler';
+import { getSlotTimeRange } from '../../utils/scheduler';
 import { GripVertical, Edit3, Lock, Unlock, Plus, RotateCcw } from 'lucide-react';
+import AssignmentCellContent from './AssignmentCellContent';
 
 interface TimetableGridProps {
   state: ScheduleState;
@@ -76,16 +77,22 @@ export default function TimetableGrid({
           draggable
           onDragStart={e => handleDragStart(e, asm.slotIndex, asm.roomId)}
         >
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
-              <span title="ドラッグして部屋を入れ替え" style={{ display: 'inline-flex', alignItems: 'center' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <div style={{ display: 'flex', gap: '3px', flex: 1 }}>
+              <span title="ドラッグして部屋を入れ替え" style={{ display: 'inline-flex', marginTop: '2px' }}>
                 <GripVertical size={13} style={{ color: 'var(--text-muted)', opacity: 0.6 }} />
               </span>
-              <span className="badge badge-primary" style={{ fontSize: '0.65rem' }}>
-                {song?.name || '曲名なし'}
-              </span>
+              <div style={{ flex: 1 }}>
+                <AssignmentCellContent
+                  assignment={asm}
+                  entry={entry}
+                  song={song || null}
+                  songs={state.songs}
+                  instruments={state.instruments}
+                />
+              </div>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '2px', marginLeft: '4px' }}>
               <button
                 onClick={(e) => {
                   e.stopPropagation();
@@ -110,16 +117,6 @@ export default function TimetableGrid({
               </button>
             </div>
           </div>
-          <strong style={{ fontSize: '0.8rem', color: 'var(--text-primary)', marginTop: '0.15rem' }}>
-            {entry.section}
-          </strong>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '2px', marginTop: '0.25rem', maxHeight: '35px', overflowY: 'auto' }}>
-            {entry.parts.map(p => (
-              <span key={`${p.instrumentId}_${p.partIndex}`} style={{ fontSize: '0.65rem', background: 'rgba(255,255,255,0.05)', padding: '1px 3px', borderRadius: '2px' }}>
-                {formatPartName(p.instrumentId, p.partIndex, entry.songId, state.songs, state.instruments)}
-              </span>
-            ))}
-          </div>
         </div>
       );
     }
@@ -131,14 +128,22 @@ export default function TimetableGrid({
           draggable
           onDragStart={e => handleDragStart(e, asm.slotIndex, asm.roomId)}
         >
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
-              <span title="ドラッグして部屋を入れ替え" style={{ display: 'inline-flex', alignItems: 'center' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <div style={{ display: 'flex', gap: '3px', flex: 1 }}>
+              <span title="ドラッグして部屋を入れ替え" style={{ display: 'inline-flex', marginTop: '2px' }}>
                 <GripVertical size={13} style={{ color: 'var(--text-muted)', opacity: 0.6 }} />
               </span>
-              <span className="badge badge-info" style={{ fontSize: '0.65rem' }}>個人練習部屋</span>
+              <div style={{ flex: 1 }}>
+                <AssignmentCellContent
+                  assignment={asm}
+                  entry={null}
+                  song={null}
+                  songs={state.songs}
+                  instruments={state.instruments}
+                />
+              </div>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '2px', marginLeft: '4px' }}>
               <button
                 onClick={(e) => {
                   e.stopPropagation();
@@ -162,23 +167,6 @@ export default function TimetableGrid({
               </button>
             </div>
           </div>
-          <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>
-            退避中: {asm.parts.length} パート
-          </div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '2px', marginTop: '0.25rem', maxHeight: '35px', overflowY: 'auto' }}>
-            {asm.parts.map((p, idx) => {
-              const pSong = p.songId ? songMap.get(p.songId) : undefined;
-              return (
-                <span
-                  key={idx}
-                  style={{ fontSize: '0.65rem', background: 'rgba(6,182,212,0.1)', padding: '1px 3px', borderRadius: '2px', color: '#22d3ee' }}
-                  title={`${pSong?.name || ''} - ${formatPartName(p.instrumentId, p.partIndex, p.songId, state.songs, state.instruments)}`}
-                >
-                  {pSong ? `${pSong.name.substring(0, 2)}:${formatPartName(p.instrumentId, p.partIndex, p.songId, state.songs, state.instruments)}` : formatPartName(p.instrumentId, p.partIndex, undefined, state.songs, state.instruments)}
-                </span>
-              );
-            })}
-          </div>
         </div>
       );
     }
@@ -201,7 +189,14 @@ export default function TimetableGrid({
         onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.03)'}
         onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
       >
-        <Plus size={12} style={{ marginRight: '3px', opacity: 0.6 }} /> 空き部屋
+        <Plus size={12} style={{ marginRight: '3px', opacity: 0.6 }} /> 
+        <AssignmentCellContent
+          assignment={asm}
+          entry={null}
+          song={null}
+          songs={state.songs}
+          instruments={state.instruments}
+        />
       </div>
     );
   };

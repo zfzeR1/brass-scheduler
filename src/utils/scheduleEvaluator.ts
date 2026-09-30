@@ -4,7 +4,8 @@ import type {
   Song,
   DuplicateNGPair,
   Entry,
-  Assignment
+  Assignment,
+  ScheduleViolation
 } from '../types';
 import { packPersonalPracticeRooms } from './personalPracticePacking';
 
@@ -92,9 +93,9 @@ export function evaluateScheduleWithContext(
   assignments: Assignment[],
   context: EvaluationContext,
   includeViolations: boolean = false
-): { score: number; violations: string[] } {
+): { score: number; violations: ScheduleViolation[] } {
   let score = 0;
-  const violations: string[] = [];
+  const violations: ScheduleViolation[] = [];
 
   const {
     rooms,
@@ -128,7 +129,11 @@ export function evaluateScheduleWithContext(
       const entry = entryMap.get(entryId);
       score -= 50000 * (count - 1);
       if (includeViolations) {
-        violations.push(`練習エントリー「${entry?.section || entryId}」が1日に複数回(${count}回)割り当てられています。`);
+        violations.push({
+          type: 'duplicate_entry',
+          severity: 'error',
+          message: `練習エントリー「${entry?.section || entryId}」が1日に複数回(${count}回)割り当てられています。`
+        });
       }
     }
   }
@@ -162,7 +167,11 @@ export function evaluateScheduleWithContext(
         const diff = totalPeople - room.capacity;
         score -= 100000 * diff;
         if (includeViolations) {
-          violations.push(`コマ ${s + 1}: 「${room.name}」の収容定員(${room.capacity}人)を超過しています(練習人数: ${totalPeople}人)`);
+          violations.push({
+            type: 'capacity',
+            severity: 'error',
+            message: `コマ ${s + 1}: 「${room.name}」の収容定員(${room.capacity}人)を超過しています(練習人数: ${totalPeople}人)`
+          });
         }
       }
 
@@ -173,7 +182,11 @@ export function evaluateScheduleWithContext(
           if (room.permanentInstrumentId !== inst.id) {
             score -= 100000;
             if (includeViolations) {
-              violations.push(`コマ ${s + 1}: 移動不可楽器「${inst.name}」が常設部屋「${rooms.find(r => r.permanentInstrumentId === inst.id)?.name || '未定義'}」以外(${room.name})で練習に割り当てられています。`);
+              violations.push({
+                type: 'immovable',
+                severity: 'error',
+                message: `コマ ${s + 1}: 移動不可楽器「${inst.name}」が常設部屋「${rooms.find(r => r.permanentInstrumentId === inst.id)?.name || '未定義'}」以外(${room.name})で練習に割り当てられています。`
+              });
             }
           }
         }
@@ -204,7 +217,11 @@ export function evaluateScheduleWithContext(
           score -= 150000;
           if (includeViolations) {
             const inst = instrumentMap.get(partA.instrumentId);
-            violations.push(`コマ ${s + 1}: 別の曲で同じパート「${inst?.name || partA.instrumentId} (${partA.partIndex + 1}st)」が同時に練習に割り当てられています（自動衝突回避）。`);
+            violations.push({
+              type: 'auto_collision',
+              severity: 'error',
+              message: `コマ ${s + 1}: 別の曲で同じパート「${inst?.name || partA.instrumentId} (${partA.partIndex + 1}st)」が同時に練習に割り当てられています（自動衝突回避）。`
+            });
           }
           continue;
         }
@@ -214,7 +231,11 @@ export function evaluateScheduleWithContext(
         if (ngSet.has(key)) {
           score -= 150000;
           if (includeViolations) {
-            violations.push(`コマ ${s + 1}: 重複NG設定されているパートが同時に練習に駆り出されています。`);
+            violations.push({
+              type: 'duplicate_ng',
+              severity: 'error',
+              message: `コマ ${s + 1}: 重複NG設定されているパートが同時に練習に駆り出されています。`
+            });
           }
         }
       }
@@ -232,7 +253,11 @@ export function evaluateScheduleWithContext(
     if (personalPracticeRooms.length === 0 && idleParts.length > 0) {
       score -= 100000;
       if (includeViolations) {
-        violations.push(`コマ ${s + 1}: 個人練習を行うための空き部屋が1つも確保できていません。`);
+        violations.push({
+          type: 'no_personal_room',
+          severity: 'error',
+          message: `コマ ${s + 1}: 個人練習を行うための空き部屋が1つも確保できていません。`
+        });
       }
     } else if (idleParts.length > 0) {
       const { partToRoomMap, overflowCount } = packPersonalPracticeRooms(personalPracticeRooms, idleParts);
@@ -243,7 +268,11 @@ export function evaluateScheduleWithContext(
       if (overflowCount > 0) {
         score -= 20000 * overflowCount;
         if (includeViolations) {
-          violations.push(`コマ ${s + 1}: 個人練習部屋の定員を超過し、待機（練習場所なし）が発生しています(${overflowCount}パート)`);
+          violations.push({
+            type: 'personal_overflow',
+            severity: 'warning',
+            message: `コマ ${s + 1}: 個人練習部屋の定員を超過し、待機（練習場所なし）が発生しています(${overflowCount}パート)`
+          });
         }
       }
     }
@@ -279,7 +308,11 @@ export function evaluateScheduleWithContext(
         if (inst.movementType === 'immovable') {
           score -= 100000;
           if (includeViolations) {
-            violations.push(`移動不可楽器「${inst.name}」がコマ ${s + 1} から ${s + 2} の間に移動しています。`);
+            violations.push({
+              type: 'movement',
+              severity: 'warning',
+              message: `移動不可楽器「${inst.name}」がコマ ${s + 1} から ${s + 2} の間に移動しています。`
+            });
           }
         } else if (inst.movementType === 'avoid_movement') {
           score -= 5000;
@@ -303,7 +336,11 @@ export function evaluateScheduleWithContext(
       score -= 200000;
       if (includeViolations) {
         const song = songs.find(s => s.id === entry.songId);
-        violations.push(`練習エントリー「${song?.name || ''} - ${entry.section}」がスケジュール内に割り当てられていません（未配置）。`);
+        violations.push({
+          type: 'missing_entry',
+          severity: 'error',
+          message: `練習エントリー「${song?.name || ''} - ${entry.section}」がスケジュール内に割り当てられていません（未配置）。`
+        });
       }
     }
   }
@@ -323,7 +360,7 @@ export function evaluateSchedule(
   entries: Entry[],
   numSlots: number,
   includeViolations: boolean = false
-): { score: number; violations: string[] } {
+): { score: number; violations: ScheduleViolation[] } {
   const context = createEvaluationContext(rooms, instruments, songs, duplicateNGPairs, entries, numSlots);
   return evaluateScheduleWithContext(assignments, context, includeViolations);
 }

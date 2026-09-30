@@ -1,7 +1,8 @@
 import { AlertTriangle, CheckCircle } from 'lucide-react';
+import type { ScheduleViolation } from '../../types';
 
 interface ViolationSummaryPanelProps {
-  violations: string[];
+  violations: ScheduleViolation[];
 }
 
 export default function ViolationSummaryPanel({ violations }: ViolationSummaryPanelProps) {
@@ -48,12 +49,12 @@ export default function ViolationSummaryPanel({ violations }: ViolationSummaryPa
               key={idx}
               style={{
                 color:
-                  v.includes('超過') || v.includes('NG') || v.includes('移動不可')
+                  v.severity === 'error'
                     ? '#f87171'
                     : 'var(--text-secondary)'
               }}
             >
-              {v}
+              {v.message}
             </li>
           ))}
           {violations.length > 5 && (

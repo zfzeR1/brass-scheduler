@@ -1,5 +1,10 @@
 export type InstrumentMovement = 'immovable' | 'avoid_movement' | 'movable';
 
+export interface ScheduleViolation {
+  type: 'capacity' | 'duplicate_ng' | 'immovable' | 'auto_collision' | 'missing_entry' | 'duplicate_entry' | 'personal_overflow' | 'no_personal_room' | 'movement';
+  severity: 'error' | 'warning';
+  message: string;
+}
 export interface TimeSettings {
   startTime: string; // "09:00"
   endTime: string;   // "17:00"

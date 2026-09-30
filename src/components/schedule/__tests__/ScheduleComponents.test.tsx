@@ -51,9 +51,9 @@ describe('Schedule Sub-Components', () => {
     });
 
     it('renders violation warnings when violations exist', () => {
-      const violations = [
-        'コマ 1: パート重複エラー',
-        'コマ 2: 移動困難楽器の移動NG'
+      const violations: ScheduleViolation[] = [
+        { type: 'auto_collision', severity: 'error', message: 'コマ 1: パート重複エラー' },
+        { type: 'movement', severity: 'warning', message: 'コマ 2: 移動困難楽器の移動NG' }
       ];
       render(<ViolationSummaryPanel violations={violations} />);
       expect(screen.getByText('制約・最適化チェック結果')).toBeDefined();

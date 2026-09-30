@@ -201,7 +201,7 @@ describe('scheduler utility functions', () => {
         true
       );
 
-      const hasDuplicateViolation = violations.some(v => v.includes('1日に複数回'));
+      const hasDuplicateViolation = violations.some(v => v.message.includes('1日に複数回'));
       expect(hasDuplicateViolation).toBe(true);
     });
 
@@ -242,7 +242,7 @@ describe('scheduler utility functions', () => {
         true
       );
 
-      const hasCapacityViolation = violations.some(v => v.includes('収容定員(1人)を超過しています'));
+      const hasCapacityViolation = violations.some(v => v.message.includes('収容定員(1人)を超過しています'));
       expect(hasCapacityViolation).toBe(true);
     });
 
@@ -280,7 +280,7 @@ describe('scheduler utility functions', () => {
         true
       );
 
-      const hasImmovableViolation = violations.some(v => v.includes('移動不可楽器「Timp.」が常設部屋'));
+      const hasImmovableViolation = violations.some(v => v.message.includes('移動不可楽器「Timp.」が常設部屋'));
       expect(hasImmovableViolation).toBe(true);
     });
 
@@ -333,7 +333,7 @@ describe('scheduler utility functions', () => {
         true
       );
 
-      const hasAutoNgViolation = violations.some(v => v.includes('別の曲で同じパート') && v.includes('自動衝突回避'));
+      const hasAutoNgViolation = violations.some(v => v.message.includes('別の曲で同じパート') && v.message.includes('自動衝突回避'));
       expect(hasAutoNgViolation).toBe(true);
     });
 
@@ -394,7 +394,7 @@ describe('scheduler utility functions', () => {
         true
       );
 
-      const hasManualNgViolation = violations.some(v => v.includes('重複NG設定されているパートが同時に'));
+      const hasManualNgViolation = violations.some(v => v.message.includes('重複NG設定されているパートが同時に'));
       expect(hasManualNgViolation).toBe(true);
     });
 
@@ -420,7 +420,7 @@ describe('scheduler utility functions', () => {
 
       expect(score).toBeLessThanOrEqual(-200000);
       const hasUnassignedViolation = violations.some(v =>
-        v.includes('練習エントリー「曲A - エンディング」がスケジュール内に割り当てられていません（未配置）。')
+        v.message.includes('練習エントリー「曲A - エンディング」がスケジュール内に割り当てられていません（未配置）。')
       );
       expect(hasUnassignedViolation).toBe(true);
     });
